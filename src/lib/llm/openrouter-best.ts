@@ -39,7 +39,7 @@ async function tryModel(
 ): Promise<{ site: Website; raw: string; model: string }> {
   const raw = await generateWithOpenRouter(messages, {
     model,
-    json: !model.includes(":free"),
+    json: false,
   });
   const json = extractJsonObject(raw);
   const site = json ? parseWebsiteLenient(json) : null;

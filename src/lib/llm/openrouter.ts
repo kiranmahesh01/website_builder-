@@ -36,7 +36,7 @@ export async function generateWithOpenRouter(
   const model =
     options?.model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 
-  const wantJson = options?.json !== false && supportsJsonObject(model);
+  const wantJson = options?.json === true && supportsJsonObject(model);
 
   try {
     const completion = await client.chat.completions.create({
@@ -51,6 +51,29 @@ export async function generateWithOpenRouter(
     if (!content) throw new Error(`OpenRouter (${model}) returned an empty response`);
     return content;
   } catch (error) {
+    // Retry once without JSON mode — some OpenRouter routes reject response_format.
+    if (
+      wantJson &&
+      error instanceof Error &&
+      /400|response_format|Provider returned error/i.test(error.message)
+    ) {
+      try {
+        const completion = await client.chat.completions.create({
+          model,
+          temperature: 0.65,
+          max_tokens: 8192,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (!content) {
+          throw new Error(`OpenRouter (${model}) returned an empty response`);
+        }
+        return content;
+      } catch (retryError) {
+        error = retryError;
+      }
+    }
+
     const message =
       error instanceof Error ? error.message : "OpenRouter request failed";
     if (/401|403|invalid.*key|unauthorized/i.test(message)) {
