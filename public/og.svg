@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0a0a0b"/>
+  <rect x="80" y="80" width="1040" height="470" rx="24" fill="#141416" stroke="#2a2a2e" stroke-width="2"/>
+  <text x="120" y="220" fill="#f4f4f5" font-family="Georgia, serif" font-size="72" font-style="italic">magic ai</text>
+  <text x="120" y="320" fill="#a1a1aa" font-family="system-ui, sans-serif" font-size="36">Turn a sentence into a site you&apos;d actually ship</text>
+  <rect x="120" y="380" width="280" height="56" rx="28" fill="#c8f542"/>
+  <text x="180" y="416" fill="#0a0a0b" font-family="system-ui, sans-serif" font-size="22" font-weight="600">Start free ’</text>
+</svg>

@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 const suggestions = [
-  "Online orchid boutique with shop and pickup",
-  "Minimal portfolio for a product designer",
-  "Local coffee roastery with menu and map",
-  "SaaS landing page for a productivity app",
+  "Vintage vinyl record shop in Nashville with events calendar",
+  "Freelance illustrator portfolio — bold colors, case studies",
+  "Neighborhood bakery with online cake orders and pickup",
+  "B2B analytics startup landing page with pricing table",
 ];
 
 export function HeroPrompt() {
@@ -28,7 +28,7 @@ export function HeroPrompt() {
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="What kind of website do you want to build?"
+          placeholder="Describe your business in a sentence — name, offer, city, vibe…"
           aria-label="Website brief"
         />
         <button
@@ -51,11 +51,11 @@ export function HeroPrompt() {
         ))}
       </div>
       <p className="mt-6 text-center text-sm text-mist">
-        Already have an account?{" "}
+        Free to start — no API keys.{" "}
         <Link href="/login" className="text-lime underline-offset-2 hover:underline">
           Log in
         </Link>{" "}
-        to publish and save projects.
+        to save and publish.
       </p>
     </div>
   );
