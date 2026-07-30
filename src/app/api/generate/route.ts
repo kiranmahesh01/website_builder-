@@ -3,6 +3,10 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { availableProviders, generateWebsite } from "@/lib/llm";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  isAllowedOpenRouterModel,
+} from "@/lib/llm/openrouter-models";
 import { getDefaultProvider } from "@/lib/llm/types";
 import { serializeProjectData, serializeSiteData } from "@/lib/site-data";
 import { assertCanCreateProject } from "@/lib/tier";
@@ -16,6 +20,7 @@ const schema = z.object({
   provider: z
     .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
+  model: z.string().max(120).optional(),
   projectId: z.string().optional(),
   fast: z.boolean().optional(),
   theme: z
@@ -48,9 +53,14 @@ export async function POST(req: Request) {
       await assertCanCreateProject(session.user.id);
     }
 
+    const model = isAllowedOpenRouterModel(parsed.data.model)
+      ? parsed.data.model
+      : DEFAULT_OPENROUTER_MODEL;
+
     const { html, data, spec, provider, meta } = await generateWebsite({
       prompt: parsed.data.prompt,
       provider: getDefaultProvider(),
+      model,
       fast: parsed.data.fast,
       theme: parsed.data.theme,
     });
@@ -72,6 +82,7 @@ export async function POST(req: Request) {
       html,
       data: serializedData,
       provider,
+      model,
       seoTitle: data?.seo?.title || data?.brand || title,
       seoDescription: data?.seo?.description || undefined,
       logoUrl: data?.logoUrl || undefined,

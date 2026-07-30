@@ -349,6 +349,7 @@ export async function generateWebsite(input: {
       provider,
       theme: input.theme,
       uiKit: input.uiKit,
+      model: input.model,
     });
     const adherence = scoreBriefAdherence(
       result.website,

@@ -16,6 +16,7 @@ export async function refineSiteSpec(input: {
   spec: SiteSpec;
   instruction: string;
   provider?: LlmProvider;
+  model?: string | null;
 }): Promise<SiteSpec> {
   const provider = input.provider && input.provider !== "demo"
     ? input.provider
@@ -30,7 +31,11 @@ export async function refineSiteSpec(input: {
   ];
 
   if (provider === "openrouter") {
-    const raw = await generateWithOpenRouter(messages, { maxTokens: 3500, json: true });
+    const raw = await generateWithOpenRouter(messages, {
+      maxTokens: 3500,
+      json: true,
+      model: input.model || undefined,
+    });
     const json = extractJsonObject(raw);
     const parsed = json ? parseSiteSpec(json) : null;
     if (parsed) return parsed;

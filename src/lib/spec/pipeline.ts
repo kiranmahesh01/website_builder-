@@ -41,6 +41,7 @@ async function callJson(
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
   messages: ChatMessage[],
   maxTokens: number,
+  model?: string | null,
 ): Promise<unknown> {
   let raw: string;
   if (provider === "openai") {
@@ -48,7 +49,11 @@ async function callJson(
   } else if (provider === "gemini") {
     raw = await generateWithGemini(messages);
   } else if (provider === "openrouter") {
-    raw = await generateWithOpenRouter(messages, { maxTokens, json: true });
+    raw = await generateWithOpenRouter(messages, {
+      maxTokens,
+      json: true,
+      model: model || undefined,
+    });
   } else {
     raw = await generateWithBytez(messages);
   }
@@ -75,6 +80,7 @@ async function callPlan(
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
   prompt: string,
   preferredTheme?: string | null,
+  model?: string | null,
 ): Promise<Plan> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const json = await callJson(
@@ -84,6 +90,7 @@ async function callPlan(
         { role: "user", content: planUserMessage(prompt) },
       ],
       500,
+      model,
     );
     const plan = parsePlan(json);
     if (plan) {
@@ -100,6 +107,7 @@ async function callStructure(
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
   intent: string,
   context: string,
+  model?: string | null,
 ): Promise<SectionId[]> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const json = await callJson(
@@ -112,6 +120,7 @@ async function callStructure(
         },
       ],
       400,
+      model,
     );
     const structure = parseStructure(json);
     if (structure) {
@@ -128,6 +137,7 @@ async function callPageContent(
   sectionIds: SectionId[],
   context: string,
   prompt: string,
+  model?: string | null,
 ): Promise<{ id: SectionId; content: Record<string, unknown> }[]> {
   const demo = buildDemoSpec(prompt, undefined);
   const demoById = Object.fromEntries(
@@ -142,6 +152,7 @@ async function callPageContent(
         { role: "user", content: contentUserMessage(sectionIds, context) },
       ],
       2800,
+      model,
     );
     const parsed = parsePageContent(json);
     if (!parsed) continue;
@@ -186,8 +197,14 @@ export async function generateSiteSpec(input: {
   prompt: string;
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">;
   theme?: string | null;
+  model?: string | null;
 }): Promise<SiteSpec> {
-  const plan = await callPlan(input.provider, input.prompt, input.theme);
+  const plan = await callPlan(
+    input.provider,
+    input.prompt,
+    input.theme,
+    input.model,
+  );
   const context = businessContext(input.prompt, plan);
 
   const pages = await Promise.all(
@@ -196,12 +213,14 @@ export async function generateSiteSpec(input: {
         input.provider,
         page.intent,
         context,
+        input.model,
       );
       const sections = await callPageContent(
         input.provider,
         sectionIds,
         context,
         input.prompt,
+        input.model,
       );
       return {
         slug: page.slug,
@@ -227,6 +246,7 @@ export async function runSpecPipeline(input: {
   provider: LlmProvider;
   theme?: string | null;
   uiKit?: string | null;
+  model?: string | null;
 }): Promise<SpecPipelineResult> {
   if (input.provider === "demo") {
     const spec = buildDemoSpec(input.prompt, input.theme);
@@ -252,6 +272,7 @@ export async function runSpecPipeline(input: {
     prompt: input.prompt,
     provider: llmProvider,
     theme: input.theme,
+    model: input.model,
   });
 
   const enriched = await enrichSpecWithImages(spec);

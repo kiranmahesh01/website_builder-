@@ -90,3 +90,45 @@ export function openRouterVisionModel(): string {
     process.env.OPENROUTER_VISION_MODEL?.trim() || DEFAULT_VISION_MODEL
   );
 }
+
+export const OPENROUTER_MODEL_OPTIONS: {
+  id: (typeof FREE_OPENROUTER_MODELS)[number];
+  label: string;
+  role: string;
+}[] = [
+  {
+    id: "openrouter/free",
+    label: "Auto (free)",
+    role: "Default — auto-routes to best free model",
+  },
+  {
+    id: "google/gemma-4-31b-it:free",
+    label: "Gemma 4 31B",
+    role: "Strong free text + JSON",
+  },
+  {
+    id: "google/gemma-4-26b-a4b-it:free",
+    label: "Gemma 4 26B",
+    role: "Free + vision (Creative Studio)",
+  },
+  {
+    id: "openai/gpt-oss-20b:free",
+    label: "GPT-OSS 20B",
+    role: "Free backup",
+  },
+  {
+    id: "nvidia/nemotron-3-nano-30b-a3b:free",
+    label: "Nemotron Nano",
+    role: "Free backup",
+  },
+  {
+    id: "nvidia/nemotron-3-super-120b-a12b:free",
+    label: "Nemotron Super",
+    role: "Large free fallback",
+  },
+];
+
+export function isAllowedOpenRouterModel(model: string | null | undefined): boolean {
+  if (!model) return false;
+  return (FREE_OPENROUTER_MODELS as readonly string[]).includes(model);
+}

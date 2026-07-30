@@ -3,6 +3,7 @@ import { openRouterBestModels } from "@/lib/llm/openrouter-best";
 import {
   DEFAULT_OPENROUTER_MODEL,
   FREE_OPENROUTER_MODELS,
+  OPENROUTER_MODEL_OPTIONS,
   openRouterVisionModel,
 } from "@/lib/llm/openrouter-models";
 import { availableProviders, getDefaultProvider } from "@/lib/llm/types";
@@ -12,6 +13,7 @@ export async function GET() {
     providers: availableProviders(),
     defaults: {
       provider: getDefaultProvider(),
+      model: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
     },
     models: {
       openrouter: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
@@ -22,5 +24,6 @@ export async function GET() {
       gemini: process.env.GEMINI_MODEL || "gemini-2.0-flash",
       bytez: process.env.BYTEZ_MODEL || "Qwen/Qwen3-4B",
     },
+    openrouterOptions: OPENROUTER_MODEL_OPTIONS,
   });
 }

@@ -3,6 +3,10 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { refineWebsite } from "@/lib/llm";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  isAllowedOpenRouterModel,
+} from "@/lib/llm/openrouter-models";
 import { getDefaultProvider } from "@/lib/llm/types";
 import { renderSpecToHtml } from "@/lib/render-site";
 import { refineSiteSpec } from "@/lib/spec/refine";
@@ -21,6 +25,7 @@ const schema = z.object({
   provider: z
     .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
+  model: z.string().max(120).optional(),
 });
 
 export async function POST(req: Request) {
@@ -55,6 +60,11 @@ export async function POST(req: Request) {
     }
 
     const provider = getDefaultProvider();
+    const model = isAllowedOpenRouterModel(parsed.data.model)
+      ? parsed.data.model
+      : project.model && isAllowedOpenRouterModel(project.model)
+        ? project.model
+        : DEFAULT_OPENROUTER_MODEL;
 
     const existing = deserializeProjectData(project.data);
     let html: string;
@@ -66,6 +76,7 @@ export async function POST(req: Request) {
         spec: existing.spec,
         instruction: parsed.data.message,
         provider,
+        model,
       });
       const website = specToWebsite(patched);
       html = await renderSpecToHtml(patched);
@@ -81,6 +92,7 @@ export async function POST(req: Request) {
           content: m.content,
         })),
         provider,
+        model,
         originalPrompt: project.prompt,
       });
       html = result.html;
@@ -96,6 +108,7 @@ export async function POST(req: Request) {
         html,
         data: serialized,
         provider,
+        model,
         messages: {
           create: [
             { role: "user", content: parsed.data.message },

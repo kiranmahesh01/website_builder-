@@ -13,11 +13,13 @@ import {
 } from "@/lib/brief-compose";
 import {
   DEFAULT_SITE_THEME,
-  SITE_THEME_DESCRIPTIONS,
-  SITE_THEME_LABELS,
-  SITE_THEMES,
+  pickThemeFromBrief,
   type SiteThemeName,
 } from "@/lib/themes";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  OPENROUTER_MODEL_OPTIONS,
+} from "@/lib/llm/openrouter-models";
 
 type Message = {
   id?: string;
@@ -65,6 +67,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [siteTheme, setSiteTheme] = useState<SiteThemeName>(DEFAULT_SITE_THEME);
+  const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL);
   const [showEditor, setShowEditor] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
@@ -143,6 +146,9 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     const value = briefText.trim();
     if (!value || busy) return;
 
+    const theme = pickThemeFromBrief(value);
+    setSiteTheme(theme);
+
     const ok = await ensureAuth(
       `/builder?prompt=${encodeURIComponent(value)}`,
     );
@@ -166,7 +172,8 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         body: JSON.stringify({
           prompt: value,
           projectId: project?.id,
-          theme: siteTheme,
+          theme,
+          model: openRouterModel,
         }),
         signal: controller.signal,
       });
@@ -262,6 +269,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         body: JSON.stringify({
           projectId: project.id,
           message: value,
+          model: openRouterModel,
         }),
       });
       const data = await res.json();
@@ -380,15 +388,15 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
-            value={siteTheme}
-            onChange={(e) => setSiteTheme(e.target.value as SiteThemeName)}
-            className="max-w-[12rem] rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
+            value={openRouterModel}
+            onChange={(e) => setOpenRouterModel(e.target.value)}
+            className="max-w-[14rem] rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
             disabled={busy}
-            title="Visual style for your site"
+            title="OpenRouter free model — falls back automatically if one fails"
           >
-            {SITE_THEMES.map((t) => (
-              <option key={t} value={t}>
-                {SITE_THEME_LABELS[t]}
+            {OPENROUTER_MODEL_OPTIONS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
               </option>
             ))}
           </select>
@@ -484,7 +492,8 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
               {project?.title || "New website"}
             </h1>
             <p className="mt-1 text-[11px] text-mist">
-              {SITE_THEME_DESCRIPTIONS[siteTheme]}
+              {OPENROUTER_MODEL_OPTIONS.find((m) => m.id === openRouterModel)?.role ||
+                "OpenRouter free models"}
             </p>
           </div>
 
