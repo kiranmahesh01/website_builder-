@@ -3,7 +3,8 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { availableProviders, generateWebsite } from "@/lib/llm";
-import { serializeSiteData } from "@/lib/site-data";
+import { serializeProjectData, serializeSiteData } from "@/lib/site-data";
+import { assertCanCreateProject } from "@/lib/tier";
 import { titleFromPrompt } from "@/lib/utils";
 import { snapshotProjectVersion } from "@/lib/versions";
 
@@ -30,10 +31,7 @@ export async function POST(req: Request) {
   const providers = availableProviders();
   if (providers.length === 0) {
     return NextResponse.json(
-      {
-        error:
-          "No LLM providers available. Use Demo (no API key), or add OPENAI_API_KEY / GOOGLE_AI_API_KEY / BYTEZ_API_KEY / OPENROUTER_API_KEY to .env and restart.",
-      },
+      { error: "Generation is temporarily unavailable. Please try again shortly." },
       { status: 503 },
     );
   }
@@ -45,7 +43,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    const { html, data, provider, meta } = await generateWebsite({
+    if (!parsed.data.projectId) {
+      await assertCanCreateProject(session.user.id);
+    }
+
+    const { html, data, spec, provider, meta } = await generateWebsite({
       prompt: parsed.data.prompt,
       provider: parsed.data.provider,
       fast: parsed.data.fast,
@@ -53,17 +55,21 @@ export async function POST(req: Request) {
     });
 
     const title = data?.brand || titleFromPrompt(parsed.data.prompt);
-    const assistantMsg = meta?.adherence != null && meta.adherence < 55
-      ? `Built your site from your brief (matched ${meta.adherence}% of your keywords — try refining in chat for more specificity). Preview on the right.`
-      : meta?.model
-        ? `Built from your brief with ${meta.model}${meta.retried ? " (refined for accuracy)" : ""}. Preview on the right — ask me to change anything.`
-        : "Generated your website from your brief. Preview on the right — refine in chat anytime.";
+    const assistantMsg =
+      meta?.adherence != null && meta.adherence < 55
+        ? `Built your site from your brief (matched ${meta.adherence}% of your keywords — try refining in chat). Preview on the right.`
+        : "Your site is ready — preview on the right. Ask me to change copy, colors, or sections in chat.";
+
+    const serializedData =
+      spec && data
+        ? serializeProjectData({ spec, website: data })
+        : serializeSiteData(data) ?? undefined;
 
     const projectData = {
       title,
       prompt: parsed.data.prompt,
       html,
-      data: serializeSiteData(data) ?? undefined,
+      data: serializedData,
       provider,
       seoTitle: data?.seo?.title || data?.brand || title,
       seoDescription: data?.seo?.description || undefined,
@@ -71,10 +77,7 @@ export async function POST(req: Request) {
       messages: {
         create: [
           { role: "user", content: parsed.data.prompt },
-          {
-            role: "assistant",
-            content: assistantMsg,
-          },
+          { role: "assistant", content: assistantMsg },
         ],
       },
     };

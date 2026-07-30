@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { renderProjectDataToHtml } from "@/lib/render-site";
 import { makeSlug } from "@/lib/utils";
-import { deserializeSiteData } from "@/lib/site-data";
-import { renderWebsiteToHtml } from "@/lib/render-site";
+import { canUseCustomDomain, getUserPlan, shouldWatermark } from "@/lib/tier";
 
 const schema = z.object({
   projectId: z.string().min(1),
@@ -39,12 +39,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let html = project.html;
-    const site = deserializeSiteData(project.data);
-    if (site) {
-      html = await renderWebsiteToHtml(site);
-    }
-
+    const plan = await getUserPlan(session.user.id);
     let customDomain = parsed.data.customDomain;
     if (customDomain === "") customDomain = null;
     if (typeof customDomain === "string") {
@@ -54,6 +49,18 @@ export async function POST(req: Request) {
         .replace(/\/$/, "")
         .trim();
     }
+
+    if (customDomain && !canUseCustomDomain(plan)) {
+      return NextResponse.json(
+        { error: "Custom domains are available on Pro. Publish to a Magic AI link for free." },
+        { status: 403 },
+      );
+    }
+
+    const html =
+      (await renderProjectDataToHtml(project.data, {
+        watermark: shouldWatermark(plan),
+      })) || project.html;
 
     const slug = project.slug || makeSlug(project.title);
     const updated = await prisma.project.update({
@@ -65,9 +72,6 @@ export async function POST(req: Request) {
         publishedAt: new Date(),
         customDomain:
           customDomain === undefined ? project.customDomain : customDomain,
-        seoTitle: site?.seo?.title || project.seoTitle,
-        seoDescription: site?.seo?.description || project.seoDescription,
-        logoUrl: site?.logoUrl || project.logoUrl,
       },
     });
 
@@ -79,6 +83,7 @@ export async function POST(req: Request) {
       domainUrl: updated.customDomain
         ? `/domain/${encodeURIComponent(updated.customDomain)}`
         : null,
+      watermarked: shouldWatermark(plan),
     });
   } catch (error) {
     console.error("publish error", error);

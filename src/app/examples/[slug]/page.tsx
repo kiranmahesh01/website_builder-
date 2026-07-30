@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { WebsiteRenderer, ThemeFonts } from "@/components/SiteRenderer";
+import { SpecSiteRenderer } from "@/components/SpecSiteRenderer";
 import { SHOWCASE_BY_SLUG } from "@/lib/showcase-examples";
 
 export default async function ExamplePage({
@@ -11,10 +11,5 @@ export default async function ExamplePage({
   const example = SHOWCASE_BY_SLUG[slug];
   if (!example) notFound();
 
-  return (
-    <>
-      <ThemeFonts theme={example.site.theme} />
-      <WebsiteRenderer site={example.site} />
-    </>
-  );
+  return <SpecSiteRenderer spec={example.spec} />;
 }

@@ -19,8 +19,9 @@ import {
   type SiteThemeName,
 } from "@/lib/themes";
 import { parseWebsiteLenient } from "@/lib/site-coerce";
-import { renderWebsiteToHtml } from "@/lib/render-site";
+import { renderSpecToHtml, renderWebsiteToHtml } from "@/lib/render-site";
 import { runSpecPipeline } from "@/lib/spec/pipeline";
+import type { SiteSpec } from "@/lib/spec/schema";
 import { scoreWebsite } from "./score-site";
 import {
   fastModePromptAppendix,
@@ -156,6 +157,7 @@ async function generateWithAdherenceRetry(
 export type GenerateResult = {
   html: string;
   data: Website | null;
+  spec?: SiteSpec | null;
   provider: LlmProvider;
   raw: string;
   mode: "schema" | "html";
@@ -347,9 +349,11 @@ export async function generateWebsite(input: {
       result.website,
       parseBrief(input.prompt),
     );
+    const html = await renderSpecToHtml(result.spec);
     return {
-      html: await renderWebsiteToHtml(result.website),
+      html,
       data: result.website,
+      spec: result.spec,
       provider,
       raw: JSON.stringify(result.spec),
       mode: "schema",

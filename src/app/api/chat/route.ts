@@ -3,7 +3,15 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { refineWebsite } from "@/lib/llm";
-import { deserializeSiteData, serializeSiteData } from "@/lib/site-data";
+import { renderSpecToHtml } from "@/lib/render-site";
+import { refineSiteSpec } from "@/lib/spec/refine";
+import { specToWebsite } from "@/lib/spec/to-website";
+import {
+  deserializeProjectData,
+  deserializeSiteData,
+  serializeProjectData,
+  serializeSiteData,
+} from "@/lib/site-data";
 import { snapshotProjectVersion } from "@/lib/versions";
 
 const schema = z.object({
@@ -45,17 +53,45 @@ export async function POST(req: Request) {
       );
     }
 
-    const { html, data, provider, reply } = await refineWebsite({
-      currentHtml: project.html,
-      currentData: deserializeSiteData(project.data),
-      instruction: parsed.data.message,
-      history: project.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-      provider: parsed.data.provider || project.provider,
-      originalPrompt: project.prompt,
-    });
+    const provider = (parsed.data.provider || project.provider) as
+      | "openai"
+      | "gemini"
+      | "bytez"
+      | "openrouter"
+      | "openrouter-best"
+      | "demo";
+
+    const existing = deserializeProjectData(project.data);
+    let html: string;
+    let serialized: string | undefined;
+    let reply: string;
+
+    if (existing) {
+      const patched = await refineSiteSpec({
+        spec: existing.spec,
+        instruction: parsed.data.message,
+        provider,
+      });
+      const website = specToWebsite(patched);
+      html = await renderSpecToHtml(patched);
+      serialized = serializeProjectData({ spec: patched, website });
+      reply = `Updated based on: "${parsed.data.message}"`;
+    } else {
+      const result = await refineWebsite({
+        currentHtml: project.html,
+        currentData: deserializeSiteData(project.data),
+        instruction: parsed.data.message,
+        history: project.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        provider,
+        originalPrompt: project.prompt,
+      });
+      html = result.html;
+      serialized = serializeSiteData(result.data) ?? undefined;
+      reply = result.reply;
+    }
 
     await snapshotProjectVersion(project.id, "Before refine");
 
@@ -63,11 +99,8 @@ export async function POST(req: Request) {
       where: { id: project.id },
       data: {
         html,
-        data: serializeSiteData(data) ?? undefined,
+        data: serialized,
         provider,
-        seoTitle: data?.seo?.title || undefined,
-        seoDescription: data?.seo?.description || undefined,
-        logoUrl: data?.logoUrl || undefined,
         messages: {
           create: [
             { role: "user", content: parsed.data.message },

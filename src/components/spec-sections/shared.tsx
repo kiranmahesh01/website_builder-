@@ -1,0 +1,213 @@
+import type { CSSProperties, ReactNode } from "react";
+import type { SiteThemeName } from "@/lib/themes";
+import { getThemeLayout } from "@/lib/themes/layout";
+
+export function SpecWrap({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ width: "min(1120px, calc(100% - 2.5rem))", marginInline: "auto" }}>
+      {children}
+    </div>
+  );
+}
+
+export function SpecSection({
+  children,
+  theme,
+  alt,
+  id,
+  style,
+}: {
+  children: ReactNode;
+  theme: SiteThemeName;
+  alt?: boolean;
+  id?: string;
+  style?: CSSProperties;
+}) {
+  const layout = getThemeLayout(theme);
+  return (
+    <section
+      id={id}
+      style={{
+        padding: layout.sectionPadding,
+        background: alt ? "var(--surface-alt)" : undefined,
+        ...style,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function SpecHeading({
+  children,
+  level = 2,
+  theme,
+}: {
+  children: ReactNode;
+  level?: 1 | 2;
+  theme: SiteThemeName;
+}) {
+  const layout = getThemeLayout(theme);
+  const Tag = level === 1 ? "h1" : "h2";
+  return (
+    <Tag
+      style={{
+        fontFamily: "var(--display)",
+        fontSize: level === 1 ? layout.h1 : layout.h2,
+        lineHeight: 1.1,
+        letterSpacing: layout.letterSpacing || "-0.02em",
+        margin: 0,
+        fontWeight: level === 1 ? 800 : 700,
+      }}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+export function SpecBody({ children }: { children: ReactNode }) {
+  return (
+    <p
+      style={{
+        color: "var(--muted)",
+        lineHeight: 1.6,
+        margin: 0,
+        maxWidth: "65ch",
+        fontSize: "var(--body-size, 1rem)",
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+export function SpecButton({
+  children,
+  theme,
+  href = "#contact",
+}: {
+  children: ReactNode;
+  theme: SiteThemeName;
+  href?: string;
+}) {
+  const layout = getThemeLayout(theme);
+  const base = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: layout.buttonStyle === "pill" ? "0.9rem 1.75rem" : "0.85rem 1.35rem",
+    fontWeight: 600,
+    textDecoration: "none",
+    letterSpacing: layout.letterSpacing,
+    borderRadius:
+      layout.buttonStyle === "pill"
+        ? "999px"
+        : layout.buttonStyle === "outline"
+          ? "0"
+          : "var(--radius)",
+  } as const;
+
+  if (layout.buttonStyle === "outline") {
+    return (
+      <a
+        href={href}
+        style={{
+          ...base,
+          border: "1px solid var(--accent)",
+          color: "var(--accent)",
+          background: "transparent",
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      style={{
+        ...base,
+        background: "var(--accent)",
+        color: theme === "minimal_studio" ? "#111" : "#111",
+        border: "none",
+      }}
+    >
+      {children}
+    </a>
+  );
+}
+
+export function str(val: unknown, fallback = ""): string {
+  return typeof val === "string" ? val : fallback;
+}
+
+export function SpecNav({ brand }: { brand: string }) {
+  return (
+    <header
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 20,
+        backdropFilter: "blur(12px)",
+        background: "color-mix(in srgb, var(--surface) 88%, transparent)",
+        borderBottom: "1px solid color-mix(in srgb, var(--text) 10%, transparent)",
+      }}
+    >
+      <SpecWrap>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "1rem 0",
+            gap: "1rem",
+          }}
+        >
+          <a
+            href="#top"
+            style={{
+              fontFamily: "var(--display)",
+              fontSize: "1.35rem",
+              color: "var(--text)",
+              textDecoration: "none",
+            }}
+          >
+            {brand}
+          </a>
+          <nav style={{ display: "flex", gap: "1.25rem", fontSize: "0.9rem" }}>
+            <a href="#features" style={{ color: "var(--muted)", textDecoration: "none" }}>
+              Features
+            </a>
+            <a href="#about" style={{ color: "var(--muted)", textDecoration: "none" }}>
+              About
+            </a>
+            <a href="#contact" style={{ color: "var(--muted)", textDecoration: "none" }}>
+              Contact
+            </a>
+          </nav>
+        </div>
+      </SpecWrap>
+    </header>
+  );
+}
+
+export function SpecWatermark() {
+  return (
+    <div
+      style={{
+        borderTop: "1px solid color-mix(in srgb, var(--text) 10%, transparent)",
+        padding: "0.75rem 0",
+        textAlign: "center",
+        fontSize: "0.75rem",
+        color: "var(--muted)",
+        background: "var(--surface-alt)",
+      }}
+    >
+      Built with{" "}
+      <a href="https://websitebuilder-main.vercel.app" style={{ color: "var(--accent)" }}>
+        Magic AI
+      </a>
+    </div>
+  );
+}

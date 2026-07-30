@@ -26,19 +26,61 @@ const NICHE_IMAGES: Record<string, string> = {
   portfolio: "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=1600&q=80",
   saas: "https://images.unsplash.com/photo-1551434678-e076c223a692?w=1600&q=80",
   bakery: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=1600&q=80",
+  portrait: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80",
 };
 
-export function resolveImageQuery(
+const queryCache = new Map<string, string>();
+
+export function resolveImageQuerySync(
   query: string,
   theme: SiteThemeName,
 ): string {
+  const cached = queryCache.get(query);
+  if (cached) return cached;
+
   const q = query.toLowerCase();
   for (const [key, url] of Object.entries(NICHE_IMAGES)) {
-    if (q.includes(key)) return url;
+    if (q.includes(key)) {
+      queryCache.set(query, url);
+      return url;
+    }
   }
   const fallbacks = FALLBACK_IMAGES[theme];
   const hash = query.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  return fallbacks[hash % fallbacks.length];
+  const url = fallbacks[hash % fallbacks.length];
+  queryCache.set(query, url);
+  return url;
+}
+
+export async function resolveImageQuery(
+  query: string,
+  theme: SiteThemeName,
+): Promise<string> {
+  const key = process.env.UNSPLASH_ACCESS_KEY;
+  if (!key) return resolveImageQuerySync(query, theme);
+
+  const cached = queryCache.get(query);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
+      { headers: { Authorization: `Client-ID ${key}` }, next: { revalidate: 86400 } },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as {
+        results?: { urls?: { regular?: string } }[];
+      };
+      const url = data.results?.[0]?.urls?.regular;
+      if (url) {
+        queryCache.set(query, url);
+        return url;
+      }
+    }
+  } catch {
+    // fall through to static
+  }
+  return resolveImageQuerySync(query, theme);
 }
 
 export function imageFromSlot(
@@ -48,7 +90,7 @@ export function imageFromSlot(
   if (typeof slot === "string" && slot.startsWith("http")) return slot;
   if (slot && typeof slot === "object" && "query" in slot) {
     const query = (slot as { query?: string }).query;
-    if (query) return resolveImageQuery(query, theme);
+    if (query) return resolveImageQuerySync(query, theme);
   }
   return undefined;
 }

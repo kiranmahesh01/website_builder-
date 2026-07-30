@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FREE_SITE_LIMIT } from "@/lib/tier";
 
 export const metadata = {
   title: "Pricing — Magic AI",
@@ -12,12 +13,12 @@ const tiers = [
     period: "forever",
     highlight: true,
     features: [
-      "Unlimited site previews",
+      `${FREE_SITE_LIMIT} saved sites`,
       "AI generation included — no API keys",
-      "DaisyUI, shadcn, Preline & Flowbite kits",
-      "Publish to a Magic AI URL",
+      "3 visual themes: Bold, Editorial, Studio",
+      "Publish to a Magic AI URL (watermarked)",
       "Chat to refine copy & sections",
-      "Save projects to your account",
+      "13 professional section types",
     ],
     cta: "Start free",
     href: "/signup",

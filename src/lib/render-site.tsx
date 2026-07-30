@@ -1,6 +1,9 @@
 import type { ReactElement } from "react";
+import { SpecSiteRenderer } from "@/components/SpecSiteRenderer";
 import { ThemeFonts, WebsiteRenderer } from "@/components/SiteRenderer";
 import type { Website } from "@/lib/schema";
+import type { SiteSpec } from "@/lib/spec/schema";
+import { deserializeProjectData } from "@/lib/site-data";
 import { normalizeUiKit } from "@/lib/ui-kits";
 import { uiKitHeadAssets } from "@/lib/ui-kits/head";
 
@@ -12,17 +15,79 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export async function renderSpecToHtml(
+  spec: SiteSpec,
+  options?: { watermark?: boolean },
+): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const tree = (
+    <SpecSiteRenderer spec={spec} watermark={options?.watermark} />
+  ) as ReactElement;
+  const body = renderToStaticMarkup(tree);
+  const title = spec.seo?.title || spec.brand;
+  const description =
+    spec.seo?.description || `Website for ${spec.brand} — built with Magic AI.`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}" />
+  <meta property="og:title" content="${escapeHtml(title)}" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { min-height: 100vh; }
+    a { color: inherit; }
+    @media (max-width: 800px) {
+      [style*="grid-template-columns: 1.05fr"],
+      [style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
 /**
  * Serialize a schema Website into a self-contained HTML document for iframe + publish.
- * Dynamic import avoids Next.js App Router static ban on `react-dom/server`.
  */
-export async function renderWebsiteToHtml(site: Website): Promise<string> {
+export async function renderWebsiteToHtml(
+  site: Website,
+  options?: { watermark?: boolean; spec?: SiteSpec | null },
+): Promise<string> {
+  if (options?.spec) {
+    return renderSpecToHtml(options.spec, { watermark: options.watermark });
+  }
+
   const { renderToStaticMarkup } = await import("react-dom/server");
 
   const tree = (
     <>
       <ThemeFonts theme={site.theme} />
       <WebsiteRenderer site={site} />
+      {options?.watermark ? (
+        <div
+          style={{
+            borderTop: "1px solid #ddd",
+            padding: "0.75rem",
+            textAlign: "center",
+            fontSize: "0.75rem",
+            color: "#666",
+          }}
+        >
+          Built with Magic AI
+        </div>
+      ) : null}
     </>
   ) as ReactElement;
 
@@ -90,4 +155,18 @@ ${body}
 ${pageScript}
 </body>
 </html>`;
+}
+
+export async function renderProjectDataToHtml(
+  raw: unknown,
+  options?: { watermark?: boolean },
+): Promise<string | null> {
+  const project = deserializeProjectData(raw);
+  if (project) {
+    return renderSpecToHtml(project.spec, { watermark: options?.watermark });
+  }
+  const { deserializeSiteData } = await import("@/lib/site-data");
+  const site = deserializeSiteData(raw);
+  if (!site) return null;
+  return renderWebsiteToHtml(site, { watermark: options?.watermark });
 }

@@ -1,6 +1,8 @@
 import type { Website } from "@/lib/schema";
-import { generateWebsiteData } from "@/lib/llm/demo";
 import type { UiKit } from "@/lib/ui-kits";
+import { buildDemoSpec } from "@/lib/spec/demo-spec";
+import { specToWebsite } from "@/lib/spec/to-website";
+import type { SiteSpec } from "@/lib/spec/schema";
 
 export type ShowcaseExample = {
   slug: string;
@@ -8,17 +10,18 @@ export type ShowcaseExample = {
   category: string;
   prompt: string;
   uiKit: UiKit;
+  spec: SiteSpec;
   site: Website;
 };
 
-const DEFINITIONS: Omit<ShowcaseExample, "site">[] = [
+const DEFINITIONS: Omit<ShowcaseExample, "site" | "spec">[] = [
   {
     slug: "harbor-roastery",
     title: "Harbor Roastery",
     category: "Coffee & café",
     prompt:
       "Harbor Roastery in Portland — single-origin pour-overs, pastry case, hours, and pickup window. Warm rustic vibe.",
-    uiKit: "daisyui",
+    uiKit: "shadcn",
   },
   {
     slug: "studio-meridian",
@@ -34,7 +37,7 @@ const DEFINITIONS: Omit<ShowcaseExample, "site">[] = [
     category: "Shop",
     prompt:
       "Petal & Stem orchid boutique in Brooklyn — online shop, local pickup, gallery of rare plants, green accents.",
-    uiKit: "daisyui",
+    uiKit: "preline",
   },
   {
     slug: "flow-state",
@@ -58,7 +61,7 @@ const DEFINITIONS: Omit<ShowcaseExample, "site">[] = [
     category: "Hospitality",
     prompt:
       "Kumo Ryokan — boutique inn in Kyoto. Rooms, onsen hours, seasonal kaiseki, reservation form, serene Japanese aesthetic.",
-    uiKit: "flowbite",
+    uiKit: "preline",
   },
   {
     slug: "ironworks-gym",
@@ -66,7 +69,7 @@ const DEFINITIONS: Omit<ShowcaseExample, "site">[] = [
     category: "Fitness",
     prompt:
       "Ironworks Gym — strength training in Chicago. Membership plans, coach profiles, class timetable, bold industrial look.",
-    uiKit: "preline",
+    uiKit: "shadcn",
   },
   {
     slug: "northline-legal",
@@ -78,15 +81,11 @@ const DEFINITIONS: Omit<ShowcaseExample, "site">[] = [
   },
 ];
 
-function withKit(prompt: string, uiKit: UiKit): Website {
-  const site = generateWebsiteData(prompt);
-  return { ...site, uiKit };
-}
-
-export const SHOWCASE_EXAMPLES: ShowcaseExample[] = DEFINITIONS.map((def) => ({
-  ...def,
-  site: withKit(def.prompt, def.uiKit),
-}));
+export const SHOWCASE_EXAMPLES: ShowcaseExample[] = DEFINITIONS.map((def) => {
+  const spec = buildDemoSpec(def.prompt, "warm_editorial");
+  const site = specToWebsite(spec, { uiKit: def.uiKit });
+  return { ...def, spec, site };
+});
 
 export const SHOWCASE_BY_SLUG = Object.fromEntries(
   SHOWCASE_EXAMPLES.map((ex) => [ex.slug, ex]),
