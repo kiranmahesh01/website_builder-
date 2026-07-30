@@ -17,6 +17,9 @@ const schema = z.object({
   projectId: z.string().optional(),
   fast: z.boolean().optional(),
   uiKit: z.enum(["daisyui", "flowbite", "preline", "shadcn", "magic"]).optional(),
+  theme: z
+    .enum(["bold_startup", "warm_editorial", "minimal_studio"])
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -48,6 +51,7 @@ export async function POST(req: Request) {
       provider: parsed.data.provider,
       fast: parsed.data.fast,
       uiKit: parsed.data.uiKit,
+      theme: parsed.data.theme,
     });
 
     const title = data?.brand || titleFromPrompt(parsed.data.prompt);

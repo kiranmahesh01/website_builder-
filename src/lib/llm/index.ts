@@ -10,7 +10,14 @@ import {
   parseBrief,
   scoreBriefAdherence,
 } from "@/lib/brief-parser";
-import { normalizeUiKit, pickUiKitFromBrief } from "@/lib/ui-kits";
+import { normalizeUiKit } from "@/lib/ui-kits";
+import {
+  getThemeTokens,
+  normalizeSiteTheme,
+  pickThemeFromBrief,
+  themeToUiKit,
+  type SiteThemeName,
+} from "@/lib/themes";
 import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { renderWebsiteToHtml } from "@/lib/render-site";
 import { scoreWebsite } from "./score-site";
@@ -33,17 +40,23 @@ import {
 
 const ADHERENCE_RETRY_THRESHOLD = 52;
 
-function applyUiKit(
+function applyThemeAndKit(
   data: Website,
   prompt: string,
-  preferred?: string | null,
+  options?: { uiKit?: string | null; theme?: string | null },
 ): Website {
-  const kit = preferred
-    ? normalizeUiKit(preferred)
-    : data.uiKit
-      ? normalizeUiKit(data.uiKit)
-      : pickUiKitFromBrief(prompt);
-  return { ...data, uiKit: kit };
+  const themeName: SiteThemeName = options?.theme
+    ? normalizeSiteTheme(options.theme)
+    : pickThemeFromBrief(prompt);
+  const kit = options?.uiKit
+    ? normalizeUiKit(options.uiKit)
+    : themeToUiKit(themeName);
+  const lockedTheme = getThemeTokens(themeName);
+  return {
+    ...data,
+    theme: lockedTheme,
+    uiKit: kit,
+  };
 }
 
 async function generateWithProvider(
@@ -162,11 +175,15 @@ export async function generateWebsite(input: {
   model?: string | null;
   fast?: boolean;
   uiKit?: string | null;
+  theme?: string | null;
 }): Promise<GenerateResult> {
   const provider = resolveProvider(input.provider);
 
   if (provider === "demo") {
-    const data = applyUiKit(generateWebsiteData(input.prompt), input.prompt, input.uiKit);
+    const data = applyThemeAndKit(generateWebsiteData(input.prompt), input.prompt, {
+      uiKit: input.uiKit,
+      theme: input.theme,
+    });
     return {
       html: await renderWebsiteToHtml(data),
       data,
@@ -192,7 +209,10 @@ export async function generateWebsite(input: {
           { fast: input.fast, retry: true },
         );
         if (retry && retry.adherence > adherence) {
-          const data = applyUiKit(retry.data, input.prompt, input.uiKit);
+          const data = applyThemeAndKit(retry.data, input.prompt, {
+            uiKit: input.uiKit,
+            theme: input.theme,
+          });
           return {
             html: await renderWebsiteToHtml(data),
             data,
@@ -211,8 +231,16 @@ export async function generateWebsite(input: {
       }
 
       return {
-        html: await renderWebsiteToHtml(applyUiKit(best.site, input.prompt, input.uiKit)),
-        data: applyUiKit(best.site, input.prompt, input.uiKit),
+        html: await renderWebsiteToHtml(
+          applyThemeAndKit(best.site, input.prompt, {
+            uiKit: input.uiKit,
+            theme: input.theme,
+          }),
+        ),
+        data: applyThemeAndKit(best.site, input.prompt, {
+          uiKit: input.uiKit,
+          theme: input.theme,
+        }),
         provider,
         raw: best.raw,
         mode: "schema",
@@ -234,8 +262,16 @@ export async function generateWebsite(input: {
         { fast: input.fast },
       );
       return {
-        html: await renderWebsiteToHtml(applyUiKit(single.data, input.prompt, input.uiKit)),
-        data: applyUiKit(single.data, input.prompt, input.uiKit),
+        html: await renderWebsiteToHtml(
+          applyThemeAndKit(single.data, input.prompt, {
+            uiKit: input.uiKit,
+            theme: input.theme,
+          }),
+        ),
+        data: applyThemeAndKit(single.data, input.prompt, {
+          uiKit: input.uiKit,
+          theme: input.theme,
+        }),
         provider: "openrouter",
         raw: single.raw,
         mode: "schema",
@@ -258,8 +294,16 @@ export async function generateWebsite(input: {
   );
 
   return {
-    html: await renderWebsiteToHtml(applyUiKit(result.data, input.prompt, input.uiKit)),
-    data: applyUiKit(result.data, input.prompt, input.uiKit),
+    html: await renderWebsiteToHtml(
+      applyThemeAndKit(result.data, input.prompt, {
+        uiKit: input.uiKit,
+        theme: input.theme,
+      }),
+    ),
+    data: applyThemeAndKit(result.data, input.prompt, {
+      uiKit: input.uiKit,
+      theme: input.theme,
+    }),
     provider,
     raw: result.raw,
     mode: "schema",

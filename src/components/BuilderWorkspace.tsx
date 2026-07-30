@@ -3,13 +3,21 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PreviewShowcase } from "@/components/PreviewShowcase";
 import { VisualEditor } from "@/components/VisualEditor";
 import {
-  DEFAULT_UI_KIT,
-  UI_KIT_LABELS,
-  UI_KITS,
-  type UiKit,
-} from "@/lib/ui-kits";
+  BRIEF_EXAMPLE_CHIP,
+  composeBrief,
+  parseBriefChip,
+  type BriefFields,
+} from "@/lib/brief-compose";
+import {
+  DEFAULT_SITE_THEME,
+  SITE_THEME_DESCRIPTIONS,
+  SITE_THEME_LABELS,
+  SITE_THEMES,
+  type SiteThemeName,
+} from "@/lib/themes";
 
 type Provider =
   | "openai"
@@ -18,39 +26,6 @@ type Provider =
   | "openrouter"
   | "openrouter-best"
   | "demo";
-
-function shortModelName(model?: string): string {
-  if (!model) return "";
-  const id = model.split("/").pop() || model;
-  return id;
-}
-
-function providerLabel(
-  p: Provider | string,
-  models?: Partial<Record<string, string>>,
-): string {
-  if (p === "openai") {
-    const m = shortModelName(models?.openai);
-    return m ? `OpenAI · ${m}` : "OpenAI";
-  }
-  if (p === "gemini") {
-    const m = shortModelName(models?.gemini);
-    return m ? `Gemini · ${m}` : "Gemini";
-  }
-  if (p === "bytez") {
-    const m = shortModelName(models?.bytez);
-    return m ? `Bytez · ${m}` : "Bytez";
-  }
-  if (p === "openrouter") {
-    const m = shortModelName(models?.openrouter);
-    return m ? `OpenRouter · ${m} (recommended)` : "OpenRouter (recommended)";
-  }
-  if (p === "openrouter-best") {
-    return "OpenRouter · Race (free, then fallback)";
-  }
-  if (p === "demo") return "Demo (no API key)";
-  return p;
-}
 
 type Message = {
   id?: string;
@@ -78,26 +53,32 @@ type Props = {
   projectId?: string;
 };
 
+const EMPTY_BRIEF: BriefFields = {
+  businessName: "",
+  whatYouDo: "",
+  city: "",
+  vibe: "",
+};
+
 export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const router = useRouter();
-  const [prompt, setPrompt] = useState(initialPrompt);
+  const [brief, setBrief] = useState<BriefFields>(EMPTY_BRIEF);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [project, setProject] = useState<ProjectState | null>(null);
-  const [providers, setProviders] = useState<Provider[]>([]);
   const [provider, setProvider] = useState<Provider>("demo");
-  const [models, setModels] = useState<Partial<Record<string, string>>>({});
+  const [bootError, setBootError] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [fastMode, setFastMode] = useState(true);
-  const [uiKit, setUiKit] = useState<UiKit>(DEFAULT_UI_KIT);
+  const [siteTheme, setSiteTheme] = useState<SiteThemeName>(DEFAULT_SITE_THEME);
   const [showEditor, setShowEditor] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
 
+  const composedBrief = useMemo(() => composeBrief(brief), [brief]);
   const previewSrcDoc = useMemo(() => project?.html || "", [project?.html]);
 
   useEffect(() => {
@@ -105,20 +86,27 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   }, [messages, busy]);
 
   useEffect(() => {
+    if (initialPrompt.trim()) {
+      setBrief(parseBriefChip(initialPrompt));
+    }
+  }, [initialPrompt]);
+
+  useEffect(() => {
     async function boot() {
       try {
+        setBootError("");
         const providersRes = await fetch("/api/providers");
-        const providersData = await providersRes.json();
-        const list = (providersData.providers || []) as Provider[];
-        setProviders(list);
-        if (providersData.models) {
-          setModels(providersData.models);
+        if (!providersRes.ok) {
+          setBootError("Could not connect to generation. Try again in a moment.");
+          return;
         }
-        if (list.length) {
-          const preferred = providersData.defaults?.provider;
-          setProvider(
-            list.includes(preferred) ? preferred : list[0],
-          );
+        const providersData = await providersRes.json();
+        const preferred = providersData.defaults?.provider as Provider | undefined;
+        const list = (providersData.providers || []) as Provider[];
+        if (list.includes(preferred!)) {
+          setProvider(preferred!);
+        } else if (list.length) {
+          setProvider(list[0]);
         }
 
         if (projectId) {
@@ -130,38 +118,37 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
             return;
           }
           if (!res.ok) {
-            setError("Could not load project.");
+            setBootError("Could not load this project.");
             return;
           }
           const data = await res.json();
           setProject(data.project);
           setMessages(data.messages || []);
-          setProvider(data.project.provider || list[0] || "demo");
+          if (data.project.provider && list.includes(data.project.provider)) {
+            setProvider(data.project.provider);
+          }
           if (data.project.published && data.project.slug) {
             setPublishUrl(`/s/${data.project.slug}`);
           }
-          if (data.providers?.length) setProviders(data.providers);
         }
       } catch {
-        setError("Failed to initialize builder.");
+        setBootError("Something went wrong loading the builder. Please refresh.");
       }
     }
     boot();
   }, [projectId, router]);
 
   useEffect(() => {
-    // Wait until providers are loaded so we don't fire with stale "demo" default.
     if (projectId || !initialPrompt.trim() || autoStarted.current) return;
-    if (!providers.length) return;
     const t = setTimeout(() => {
       if (!autoStarted.current && initialPrompt.trim()) {
         autoStarted.current = true;
         void generate(initialPrompt);
       }
-    }, 250);
+    }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt, projectId, providers, provider]);
+  }, [initialPrompt, projectId]);
 
   async function ensureAuth(callback: string): Promise<boolean> {
     const sessionProbe = await fetch("/api/projects");
@@ -172,8 +159,8 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     return true;
   }
 
-  async function generate(brief: string) {
-    const value = brief.trim();
+  async function generate(briefText: string) {
+    const value = briefText.trim();
     if (!value || busy) return;
 
     const ok = await ensureAuth(
@@ -183,13 +170,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
 
     setBusy(true);
     setError("");
-    setStatus(
-      provider === "openrouter-best"
-        ? "Racing free models, then falling back to GPT-4o mini if needed…"
-        : provider === "openrouter"
-          ? "Designing with OpenRouter…"
-          : "Magic AI is designing your site…",
-    );
+    setStatus("Building your site from your brief…");
     setMessages((prev) => [
       ...prev,
       { role: "user", content: value },
@@ -206,8 +187,8 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           prompt: value,
           provider,
           projectId: project?.id,
-          fast: fastMode,
-          uiKit,
+          fast: true,
+          theme: siteTheme,
         }),
         signal: controller.signal,
       });
@@ -216,7 +197,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       let data: {
         error?: string;
         project?: ProjectState;
-        providers?: Provider[];
       } = {};
       try {
         data = await res.json();
@@ -224,13 +204,13 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         setError(
           res.ok
             ? "Generation returned an invalid response."
-            : `Generation failed (HTTP ${res.status}). Try OpenRouter or Demo.`,
+            : `Generation failed (HTTP ${res.status}). Please try again.`,
         );
         setMessages((prev) => prev.slice(0, -1));
         return;
       }
       if (!res.ok) {
-        setError(data.error || "Generation failed");
+        setError(data.error || "Generation failed. Please try again.");
         setMessages((prev) => prev.slice(0, -1));
         return;
       }
@@ -240,15 +220,12 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         return;
       }
       setProject(data.project);
-      setProviders(data.providers || providers);
-      const usedDemo = data.project.provider === "demo" && provider !== "demo";
       setMessages([
         { role: "user", content: value },
         {
           role: "assistant",
-          content: usedDemo
-            ? "AI models were unavailable, so I built a polished demo template from your brief. Preview on the right — refine in chat, or retry with OpenRouter."
-            : "Generated your website. Preview it on the right — ask me to refine layout, copy, colors, or sections.",
+          content:
+            "Your site is ready — preview on the right. Ask me to change copy, colors, or sections in chat.",
         },
       ]);
       if (!projectId) {
@@ -259,14 +236,28 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         err instanceof DOMException && err.name === "AbortError";
       setError(
         aborted
-          ? "Generation timed out. Try OpenRouter (single model) or a shorter brief."
-          : "Network error during generation. Check your connection and try again.",
+          ? "That took too long. Try a shorter brief or try again."
+          : "Network error. Check your connection and try again.",
       );
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setBusy(false);
       setStatus("");
     }
+  }
+
+  function onGenerateClick() {
+    const value = composedBrief.trim();
+    if (!value) {
+      setError("Add at least a business name and what you do.");
+      return;
+    }
+    void generate(value);
+  }
+
+  function applyExampleChip() {
+    setBrief(parseBriefChip(BRIEF_EXAMPLE_CHIP));
+    setError("");
   }
 
   async function onChat(e: FormEvent) {
@@ -298,13 +289,13 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Refine failed");
+        setError(data.error || "Could not apply that change. Try rephrasing.");
         return;
       }
       setProject(data.project);
       setMessages(data.messages || []);
     } catch {
-      setError("Could not refine the site.");
+      setError("Could not apply that change. Please try again.");
     } finally {
       setBusy(false);
       setStatus("");
@@ -327,7 +318,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Publish failed");
+        setError(data.error || "Publish failed. Please try again.");
         return;
       }
       setPublishUrl(data.url);
@@ -352,11 +343,16 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         },
       ]);
     } catch {
-      setError("Publish failed.");
+      setError("Publish failed. Please try again.");
     } finally {
       setBusy(false);
       setStatus("");
     }
+  }
+
+  function updateBriefField<K extends keyof BriefFields>(key: K, value: string) {
+    setBrief((prev) => ({ ...prev, [key]: value }));
+    setError("");
   }
 
   return (
@@ -374,50 +370,19 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           </Link>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {providers.length > 0 ? (
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as Provider)}
-              className="rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
-              disabled={busy}
-            >
-              {providers.map((p) => (
-                <option key={p} value={p}>
-                  {providerLabel(p, models)}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span
-              className="max-w-[14rem] truncate text-xs text-coral"
-              title="Demo should always be available. Restart the server if this persists."
-            >
-              No providers — restart the server
-            </span>
-          )}
           <select
-            value={uiKit}
-            onChange={(e) => setUiKit(e.target.value as UiKit)}
-            className="max-w-[11rem] rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
+            value={siteTheme}
+            onChange={(e) => setSiteTheme(e.target.value as SiteThemeName)}
+            className="max-w-[12rem] rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
             disabled={busy}
-            title="UI component library for generated sites"
+            title="Visual style for your site"
           >
-            {UI_KITS.filter((k) => k !== "magic").map((k) => (
-              <option key={k} value={k}>
-                {UI_KIT_LABELS[k]}
+            {SITE_THEMES.map((t) => (
+              <option key={t} value={t}>
+                {SITE_THEME_LABELS[t]}
               </option>
             ))}
           </select>
-          <div className="hidden rounded-full border border-[var(--line)] p-0.5 sm:flex">
-            <button
-              type="button"
-              onClick={() => setFastMode((v) => !v)}
-              className={`rounded-full px-3 py-1 text-xs ${fastMode ? "bg-lime/20 text-lime" : "text-mist"}`}
-              title="Fast mode: quicker generation, still follows your brief"
-            >
-              Fast
-            </button>
-          </div>
           <div className="hidden rounded-full border border-[var(--line)] p-0.5 sm:flex">
             <button
               type="button"
@@ -462,6 +427,19 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         </div>
       </header>
 
+      {bootError ? (
+        <div className="flex items-center justify-between gap-3 border-b border-coral/30 bg-coral/10 px-4 py-2 text-xs text-coral">
+          <span>{bootError}</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full border border-coral/40 px-3 py-1 hover:bg-coral/10"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
       <div
         className={`grid min-h-0 flex-1 ${
           showEditor && project
@@ -471,21 +449,62 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       >
         <aside className="flex min-h-0 flex-col border-b border-[var(--line)] lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--line)] px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-mist">
-              Chat
-            </p>
+            <p className="text-xs uppercase tracking-[0.18em] text-mist">Chat</p>
             <h1 className="mt-1 truncate font-[family-name:var(--font-display)] text-lg font-bold">
               {project?.title || "New website"}
             </h1>
+            <p className="mt-1 text-[11px] text-mist">
+              {SITE_THEME_DESCRIPTIONS[siteTheme]}
+            </p>
           </div>
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            {messages.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-mist">
-                <p className="text-fog">Tip: be specific — name your business, city, style, and sections you want.</p>
-                <p className="mt-2 text-xs">
-                  Example: &quot;Brooklyn orchid boutique called Petal &amp; Stem — online shop, pickup, warm editorial vibe, green accents&quot;
-                </p>
+            {messages.length === 0 && !project?.html ? (
+              <div className="space-y-3 rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm">
+                <p className="text-fog">Tell us about your business</p>
+                <label className="block">
+                  <span className="text-xs text-mist">Business name</span>
+                  <input
+                    value={brief.businessName}
+                    onChange={(e) => updateBriefField("businessName", e.target.value)}
+                    placeholder="Petal & Stem"
+                    className="mt-1 w-full rounded-xl border border-[var(--line)] bg-ink-soft px-3 py-2 text-sm outline-none focus:border-lime/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-mist">What you do</span>
+                  <input
+                    value={brief.whatYouDo}
+                    onChange={(e) => updateBriefField("whatYouDo", e.target.value)}
+                    placeholder="orchid boutique with online shop and pickup"
+                    className="mt-1 w-full rounded-xl border border-[var(--line)] bg-ink-soft px-3 py-2 text-sm outline-none focus:border-lime/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-mist">City</span>
+                  <input
+                    value={brief.city}
+                    onChange={(e) => updateBriefField("city", e.target.value)}
+                    placeholder="Brooklyn"
+                    className="mt-1 w-full rounded-xl border border-[var(--line)] bg-ink-soft px-3 py-2 text-sm outline-none focus:border-lime/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-mist">Vibe</span>
+                  <input
+                    value={brief.vibe}
+                    onChange={(e) => updateBriefField("vibe", e.target.value)}
+                    placeholder="warm editorial, green accents"
+                    className="mt-1 w-full rounded-xl border border-[var(--line)] bg-ink-soft px-3 py-2 text-sm outline-none focus:border-lime/40"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={applyExampleChip}
+                  className="text-left text-xs text-lime underline-offset-2 hover:underline"
+                >
+                  Try example: {BRIEF_EXAMPLE_CHIP}
+                </button>
               </div>
             ) : null}
             {messages.map((m, i) => (
@@ -501,61 +520,40 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
               </div>
             ))}
             {status ? (
-              <p className="text-xs text-lime animate-pulse">{status}</p>
+              <p className="animate-pulse text-xs text-lime">{status}</p>
             ) : null}
             {error ? <p className="text-xs text-coral">{error}</p> : null}
             <div ref={chatEndRef} />
           </div>
 
-          <form
-            onSubmit={onChat}
-            className="border-t border-[var(--line)] p-3"
-          >
-            {!project?.html ? (
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={3}
-                placeholder="What kind of website do you want to build?"
-                className="mb-2 w-full resize-none rounded-2xl border border-[var(--line)] bg-ink-soft px-3 py-2 text-sm outline-none focus:border-lime/40"
-              />
-            ) : null}
-            {!project?.html ? (
-              <p className="mb-2 text-[11px] text-mist">
-                Include: business name, location, offer, vibe (e.g. minimal, rustic), and sections (menu, pricing, booking).
-              </p>
-            ) : null}
-            <div className="flex gap-2">
-              <input
-                value={project?.html ? chatInput : ""}
-                onChange={(e) =>
-                  project?.html
-                    ? setChatInput(e.target.value)
-                    : setPrompt(e.target.value)
-                }
-                placeholder={
-                  project?.html
-                    ? "Make the hero darker and add a pricing section…"
-                    : "Or type a short brief and hit Generate"
-                }
-                disabled={busy}
-                className={`min-w-0 flex-1 rounded-full border border-[var(--line)] bg-ink-soft px-4 py-2.5 text-sm outline-none focus:border-lime/40 ${!project?.html ? "hidden" : ""}`}
-              />
+          <form onSubmit={onChat} className="border-t border-[var(--line)] p-3">
+            {project?.html ? (
+              <div className="flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Make the hero darker and add a pricing section…"
+                  disabled={busy}
+                  className="min-w-0 flex-1 rounded-full border border-[var(--line)] bg-ink-soft px-4 py-2.5 text-sm outline-none focus:border-lime/40"
+                />
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-full bg-fog px-4 py-2.5 text-sm font-semibold text-ink disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+            ) : (
               <button
-                type={project?.html ? "submit" : "button"}
-                onClick={
-                  project?.html
-                    ? undefined
-                    : () => {
-                        void generate(prompt || chatInput || initialPrompt);
-                      }
-                }
-                disabled={busy}
-                className="rounded-full bg-fog px-4 py-2.5 text-sm font-semibold text-ink disabled:opacity-50"
+                type="button"
+                onClick={onGenerateClick}
+                disabled={busy || !composedBrief.trim()}
+                className="w-full rounded-full bg-fog py-2.5 text-sm font-semibold text-ink disabled:opacity-50"
               >
-                {project?.html ? "Send" : "Generate"}
+                Generate site
               </button>
-            </div>
+            )}
           </form>
         </aside>
 
@@ -578,15 +576,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
                   sandbox="allow-scripts allow-same-origin"
                 />
               ) : (
-                <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_top,#1a1d24,transparent_55%),#0e1014] p-8 text-center lg:min-h-0">
-                  <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-fog">
-                    Your site will appear here
-                  </p>
-                  <p className="max-w-sm text-sm text-mist">
-                    Chat a brief on the left. Magic AI builds a schema-driven
-                    site (sections + theme), then renders it for preview.
-                  </p>
-                </div>
+                <PreviewShowcase />
               )}
             </div>
           </div>
