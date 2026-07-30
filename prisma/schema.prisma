@@ -21,6 +21,7 @@ model User {
   sessions     Session[]
   projects     Project[]
   assets       Asset[]
+  creatives    CreativeProject[]
 }
 
 model Account {
@@ -110,4 +111,21 @@ model Message {
   createdAt DateTime @default(now())
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model CreativeProject {
+  id                String   @id @default(cuid())
+  title             String
+  prompt            String
+  referenceImageUrl String?
+  status            String   @default("draft")
+  /// JSON: script, scenes, assets, stage progress
+  data              String?
+  outputUrl         String?
+  voiceoverUrl      String?
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

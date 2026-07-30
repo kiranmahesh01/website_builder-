@@ -74,6 +74,9 @@ export default async function HomePage() {
           <Link href="/compare" className="hidden text-mist hover:text-fog sm:inline">
             Compare
           </Link>
+          <Link href="/studio" className="hidden text-mist hover:text-fog sm:inline">
+            Studio
+          </Link>
           <Link href="/templates" className="hidden text-mist hover:text-fog sm:inline">
             Templates
           </Link>
