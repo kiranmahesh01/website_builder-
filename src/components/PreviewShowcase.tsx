@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SpecSiteRenderer } from "@/components/SpecSiteRenderer";
 import { SHOWCASE_EXAMPLES } from "@/lib/showcase-examples";
 
 export function PreviewShowcase() {
@@ -20,14 +21,10 @@ export function PreviewShowcase() {
         <span>Example output — {example.title}</span>
         <span>{example.category}</span>
       </div>
-      <div className="relative min-h-0 flex-1">
-        <iframe
-          key={example.slug}
-          title={`Example: ${example.title}`}
-          src={`/examples/${example.slug}`}
-          className="absolute inset-0 h-full w-full border-0 bg-white"
-          sandbox="allow-scripts allow-same-origin"
-        />
+      <div className="relative min-h-0 flex-1 overflow-auto bg-white">
+        <div className="origin-top scale-[0.85] sm:scale-90">
+          <SpecSiteRenderer spec={example.spec} />
+        </div>
       </div>
       <p className="border-t border-[var(--line)] px-4 py-3 text-center text-xs text-mist">
         Fill in your business on the left — your site replaces this preview
