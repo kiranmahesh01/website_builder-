@@ -71,6 +71,9 @@ export default async function HomePage() {
           magic ai
         </Link>
         <nav className="flex items-center gap-4 text-sm">
+          <Link href="/compare" className="hidden text-mist hover:text-fog sm:inline">
+            Compare
+          </Link>
           <Link href="/templates" className="hidden text-mist hover:text-fog sm:inline">
             Templates
           </Link>

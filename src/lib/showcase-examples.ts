@@ -1,5 +1,6 @@
 import type { Website } from "@/lib/schema";
 import type { UiKit } from "@/lib/ui-kits";
+import { BENCHMARK_PROMPTS } from "@/lib/benchmark-prompts";
 import { buildDemoSpec } from "@/lib/spec/demo-spec";
 import { specToWebsite } from "@/lib/spec/to-website";
 import type { SiteSpec } from "@/lib/spec/schema";
@@ -10,11 +11,20 @@ export type ShowcaseExample = {
   category: string;
   prompt: string;
   uiKit: UiKit;
+  theme?: "bold_startup" | "warm_editorial" | "minimal_studio";
   spec: SiteSpec;
   site: Website;
 };
 
 const DEFINITIONS: Omit<ShowcaseExample, "site" | "spec">[] = [
+  ...BENCHMARK_PROMPTS.map((b) => ({
+    slug: b.slug,
+    title: b.title,
+    category: b.category,
+    prompt: b.prompt,
+    uiKit: b.uiKit as UiKit,
+    theme: b.theme,
+  })),
   {
     slug: "harbor-roastery",
     title: "Harbor Roastery",
@@ -82,8 +92,8 @@ const DEFINITIONS: Omit<ShowcaseExample, "site" | "spec">[] = [
 ];
 
 export const SHOWCASE_EXAMPLES: ShowcaseExample[] = DEFINITIONS.map((def) => {
-  const spec = buildDemoSpec(def.prompt, "warm_editorial");
-  const site = specToWebsite(spec, { uiKit: def.uiKit });
+  const spec = buildDemoSpec(def.prompt, def.theme ?? "warm_editorial");
+  const site = specToWebsite(spec, { uiKit: def.uiKit, theme: def.theme });
   return { ...def, spec, site };
 });
 

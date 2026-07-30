@@ -5,5 +5,6 @@ export * from "./validate";
 export * from "./to-website";
 export * from "./demo-spec";
 export * from "./images";
+export * from "./image-providers";
 export * from "./eval-prompts";
 export * from "./refine";

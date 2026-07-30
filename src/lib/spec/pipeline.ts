@@ -28,6 +28,7 @@ import {
 } from "./schema";
 import { specToWebsite } from "./to-website";
 import type { Website } from "@/lib/schema";
+import { enrichSpecWithImages } from "./images";
 import {
   normalizeStructure,
   validateSectionContent,
@@ -253,18 +254,20 @@ export async function runSpecPipeline(input: {
     theme: input.theme,
   });
 
-  const website = specToWebsite(spec, {
-    theme: input.theme || spec.theme,
+  const enriched = await enrichSpecWithImages(spec);
+
+  const website = specToWebsite(enriched, {
+    theme: input.theme || enriched.theme,
     uiKit: input.uiKit,
   });
 
   return {
-    spec,
+    spec: enriched,
     website,
     meta: {
       pipeline: "spec",
-      pages: spec.pages.length,
-      sections: spec.pages.reduce((n, p) => n + p.sections.length, 0),
+      pages: enriched.pages.length,
+      sections: enriched.pages.reduce((n, p) => n + p.sections.length, 0),
     },
   };
 }
