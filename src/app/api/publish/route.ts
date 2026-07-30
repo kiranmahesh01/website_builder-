@@ -57,12 +57,12 @@ export async function POST(req: Request) {
       );
     }
 
+    const slug = project.slug || makeSlug(project.title);
     const html =
       (await renderProjectDataToHtml(project.data, {
         watermark: shouldWatermark(plan),
+        siteSlug: slug,
       })) || project.html;
-
-    const slug = project.slug || makeSlug(project.title);
     const updated = await prisma.project.update({
       where: { id: project.id },
       data: {

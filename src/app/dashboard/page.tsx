@@ -47,6 +47,12 @@ export default async function DashboardPage() {
             Creative Studio
           </Link>
           <Link
+            href="/dashboard/leads"
+            className="rounded-full border border-[var(--line)] px-5 py-2.5 text-sm font-semibold text-fog transition hover:border-lime/40"
+          >
+            Leads
+          </Link>
+          <Link
             href="/builder"
             className="rounded-full bg-lime px-5 py-2.5 text-sm font-semibold text-ink"
           >

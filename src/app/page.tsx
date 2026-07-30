@@ -16,7 +16,8 @@ const included = [
 const comparisons = [
   { them: "Pick a template, swap placeholder text", us: "Describe your business — we compose the page" },
   { them: "Drag blocks for an hour", us: "Preview a full site in under a minute" },
-  { them: "Bring your own API keys", us: "Generation included — sign up and go" },
+  { them: "Platform lock-in, no code export", us: "Export React, Astro, HTML, or WordPress XML" },
+  { them: "Decorative contact forms", us: "Working forms with lead inbox (like Durable)" },
   { them: "Generic “welcome to our website” copy", us: "Brief parser pushes your name, city, and offer" },
 ];
 
@@ -162,8 +163,11 @@ export default async function HomePage() {
       <section className="border-t border-[var(--line)] py-24">
         <div className="mx-auto max-w-4xl px-6">
           <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
-            Template builders vs Magic AI
+            Magic AI vs Wegic, Framer, Durable & more
           </h2>
+          <p className="mt-3 max-w-2xl text-mist">
+            See how we stack up against every major AI website builder — with export, lead inbox, and promo video studio.
+          </p>
           <div className="mt-12 overflow-hidden rounded-2xl border border-[var(--line)]">
             <div className="grid grid-cols-2 border-b border-[var(--line)] bg-ink-soft/60 text-xs uppercase tracking-wider text-mist">
               <div className="px-5 py-3">Typical builder</div>

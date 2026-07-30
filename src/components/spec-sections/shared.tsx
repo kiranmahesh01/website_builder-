@@ -85,10 +85,12 @@ export function SpecButton({
   children,
   theme,
   href = "#contact",
+  type,
 }: {
   children: ReactNode;
   theme: SiteThemeName;
   href?: string;
+  type?: "submit" | "button";
 }) {
   const layout = getThemeLayout(theme);
   const base = {
@@ -105,34 +107,42 @@ export function SpecButton({
         : layout.buttonStyle === "outline"
           ? "0"
           : "var(--radius)",
+    cursor: "pointer",
+    font: "inherit",
   } as const;
+
+  const outlineStyle = {
+    ...base,
+    border: "1px solid var(--accent)",
+    color: "var(--accent)",
+    background: "transparent",
+  };
+
+  const solidStyle = {
+    ...base,
+    background: "var(--accent)",
+    color: theme === "minimal_studio" ? "#111" : "#111",
+    border: "none",
+  };
+
+  if (type) {
+    return (
+      <button type={type} style={layout.buttonStyle === "outline" ? outlineStyle : solidStyle}>
+        {children}
+      </button>
+    );
+  }
 
   if (layout.buttonStyle === "outline") {
     return (
-      <a
-        href={href}
-        style={{
-          ...base,
-          border: "1px solid var(--accent)",
-          color: "var(--accent)",
-          background: "transparent",
-        }}
-      >
+      <a href={href} style={outlineStyle}>
         {children}
       </a>
     );
   }
 
   return (
-    <a
-      href={href}
-      style={{
-        ...base,
-        background: "var(--accent)",
-        color: theme === "minimal_studio" ? "#111" : "#111",
-        border: "none",
-      }}
-    >
+    <a href={href} style={solidStyle}>
       {children}
     </a>
   );

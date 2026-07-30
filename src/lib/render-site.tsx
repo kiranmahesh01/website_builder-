@@ -17,16 +17,59 @@ function escapeHtml(s: string): string {
 
 export async function renderSpecToHtml(
   spec: SiteSpec,
-  options?: { watermark?: boolean },
+  options?: { watermark?: boolean; siteSlug?: string },
 ): Promise<string> {
   const { renderToStaticMarkup } = await import("react-dom/server");
   const tree = (
-    <SpecSiteRenderer spec={spec} watermark={options?.watermark} />
+    <SpecSiteRenderer
+      spec={spec}
+      watermark={options?.watermark}
+      siteSlug={options?.siteSlug}
+    />
   ) as ReactElement;
   const body = renderToStaticMarkup(tree);
   const title = spec.seo?.title || spec.brand;
   const description =
     spec.seo?.description || `Website for ${spec.brand} — built with Magic AI.`;
+
+  const appOrigin =
+    process.env.AUTH_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "";
+
+  const contactScript = options?.siteSlug
+    ? `<script>
+(function(){
+  var form = document.getElementById("magic-contact-form");
+  if (!form) return;
+  form.addEventListener("submit", async function(e) {
+    e.preventDefault();
+    var status = document.getElementById("magic-contact-status");
+    var fd = new FormData(form);
+    if (fd.get("_hp")) return;
+    if (status) status.textContent = "Sending…";
+    try {
+      var res = await fetch("${appOrigin}/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: "${escapeHtml(options.siteSlug)}",
+          name: fd.get("name"),
+          email: fd.get("email"),
+          message: fd.get("message")
+        })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      form.reset();
+      if (status) status.textContent = "Thanks! We'll be in touch soon.";
+    } catch (err) {
+      if (status) status.textContent = err.message || "Something went wrong. Try again.";
+    }
+  });
+})();
+</script>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -54,6 +97,7 @@ export async function renderSpecToHtml(
 </head>
 <body>
 ${body}
+${contactScript}
 </body>
 </html>`;
 }
@@ -159,11 +203,14 @@ ${pageScript}
 
 export async function renderProjectDataToHtml(
   raw: unknown,
-  options?: { watermark?: boolean },
+  options?: { watermark?: boolean; siteSlug?: string },
 ): Promise<string | null> {
   const project = deserializeProjectData(raw);
   if (project) {
-    return renderSpecToHtml(project.spec, { watermark: options?.watermark });
+    return renderSpecToHtml(project.spec, {
+      watermark: options?.watermark,
+      siteSlug: options?.siteSlug,
+    });
   }
   const { deserializeSiteData } = await import("@/lib/site-data");
   const site = deserializeSiteData(raw);

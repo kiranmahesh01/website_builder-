@@ -9,10 +9,12 @@ export function SpecSiteRenderer({
   spec,
   watermark = false,
   pageSlug,
+  siteSlug,
 }: {
   spec: SiteSpec;
   watermark?: boolean;
   pageSlug?: string;
+  siteSlug?: string;
 }) {
   const theme = spec.theme as SiteThemeName;
   const tokens = getThemeTokens(theme);
@@ -32,6 +34,7 @@ export function SpecSiteRenderer({
               content={section.content}
               brand={spec.brand}
               theme={theme}
+              siteSlug={siteSlug}
             />
           );
         })}

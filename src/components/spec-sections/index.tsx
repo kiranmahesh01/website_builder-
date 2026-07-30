@@ -15,6 +15,7 @@ type SectionProps = {
   content: Record<string, unknown>;
   brand: string;
   theme: SiteThemeName;
+  siteSlug?: string;
 };
 
 export function HeroCentered({ content, brand, theme }: SectionProps) {
@@ -343,7 +344,7 @@ export function AboutText({ content, brand, theme }: SectionProps) {
   );
 }
 
-export function ContactForm({ content, theme }: SectionProps) {
+export function ContactForm({ content, theme, siteSlug }: SectionProps) {
   return (
     <SpecSection theme={theme} id="contact">
       <SpecWrap>
@@ -352,11 +353,20 @@ export function ContactForm({ content, theme }: SectionProps) {
           <div style={{ marginTop: "0.75rem" }}>
             <SpecBody>{str(content.subhead, "Send us a message.")}</SpecBody>
           </div>
-          <form style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem" }}>
-            <input placeholder="Name" style={inputStyle} readOnly />
-            <input placeholder="Email" type="email" style={inputStyle} readOnly />
-            <textarea placeholder="Message" rows={4} style={inputStyle} readOnly />
-            <SpecButton theme={theme}>{str(content.submitLabel, "Send")}</SpecButton>
+          <form
+            id="magic-contact-form"
+            data-site-slug={siteSlug || ""}
+            style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem" }}
+            onSubmit={siteSlug ? undefined : (e) => e.preventDefault()}
+          >
+            <input name="name" placeholder="Name" required style={inputStyle} />
+            <input name="email" placeholder="Email" type="email" required style={inputStyle} />
+            <textarea name="message" placeholder="Message" rows={4} required style={inputStyle} />
+            <input type="text" name="_hp" style={{ display: "none" }} tabIndex={-1} autoComplete="off" />
+            <SpecButton theme={theme} type="submit">
+              {str(content.submitLabel, "Send")}
+            </SpecButton>
+            <p id="magic-contact-status" style={{ fontSize: "0.85rem", color: "var(--muted)", minHeight: "1.25rem" }} />
           </form>
         </div>
       </SpecWrap>

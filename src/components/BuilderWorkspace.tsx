@@ -279,6 +279,38 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     }
   }
 
+  async function onExport(format: "html" | "react" | "astro" | "wordpress") {
+    if (!project?.id || busy) return;
+    setBusy(true);
+    setError("");
+    setStatus(`Exporting ${format}…`);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Export failed");
+
+      const blob = new Blob([data.export.content], {
+        type: data.export.mimeType,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.export.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus(`Exported ${format}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setBusy(false);
+      setTimeout(() => setStatus(""), 2000);
+    }
+  }
+
   async function onPublish() {
     if (!project?.id || busy) return;
     setBusy(true);
@@ -385,6 +417,27 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
               View live
             </Link>
           ) : null}
+          <div className="relative group">
+            <button
+              type="button"
+              disabled={!project?.html || busy}
+              className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs text-mist disabled:opacity-40"
+            >
+              Export ↓
+            </button>
+            <div className="invisible absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-[var(--line)] bg-ink py-1 opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100">
+              {(["html", "react", "astro", "wordpress"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => onExport(fmt)}
+                  className="block w-full px-4 py-2 text-left text-xs text-mist hover:bg-ink-soft hover:text-fog"
+                >
+                  {fmt === "wordpress" ? "WordPress XML" : fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => setShowEditor((v) => !v)}
