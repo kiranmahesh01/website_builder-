@@ -2,26 +2,15 @@ import { parseBrief, scoreBriefAdherence } from "@/lib/brief-parser";
 import { type Website } from "@/lib/schema";
 import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { generateWithOpenRouter } from "./openrouter";
+import {
+  DEFAULT_OPENROUTER_BEST_MODELS,
+  PAID_FALLBACK_MODEL,
+  openRouterBestModels,
+} from "./openrouter-models";
 import { scoreWebsite } from "./score-site";
 import { extractJsonObject, type ChatMessage } from "./types";
 
-/** Free OpenRouter models that currently accept chat completions. */
-export const DEFAULT_OPENROUTER_BEST_MODELS = [
-  "google/gemma-4-26b-a4b-it:free",
-  "openai/gpt-oss-20b:free",
-  "nvidia/nemotron-3-nano-30b-a3b:free",
-];
-
-export function openRouterBestModels(): string[] {
-  const raw = process.env.OPENROUTER_BEST_MODELS?.trim();
-  if (raw) {
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return DEFAULT_OPENROUTER_BEST_MODELS;
-}
+export { openRouterBestModels, DEFAULT_OPENROUTER_BEST_MODELS };
 
 export type BestOfResult = {
   site: Website;
@@ -111,7 +100,7 @@ export async function generateOpenRouterBestOf(
     throw new AggregateError(errors.map((e) => new Error(e)));
   } catch (err) {
     const fallbackModel =
-      process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+      process.env.OPENROUTER_MODEL || PAID_FALLBACK_MODEL;
     try {
       const winner = await tryModel(messages, fallbackModel, prompt);
       return {

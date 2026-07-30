@@ -1,6 +1,9 @@
 import OpenAI from "openai";
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
-import { extractJsonObject } from "@/lib/llm/types";
+import {
+  FREE_OPENROUTER_MODELS,
+  openRouterVisionModel,
+} from "@/lib/llm/openrouter-models";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
@@ -23,39 +26,43 @@ export async function analyzeReferenceImage(
     },
   });
 
-  const model =
-    process.env.OPENROUTER_VISION_MODEL || "google/gemini-2.0-flash-001";
+  const visionModels = [
+    openRouterVisionModel(),
+    ...FREE_OPENROUTER_MODELS.filter((m) => m.includes("gemma")),
+  ];
 
-  try {
-    const completion = await client.chat.completions.create({
-      model,
-      max_tokens: 400,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Analyze this reference image for a brand video creative. Brand context: ${brandContext}
+  for (const visionModel of [...new Set(visionModels)]) {
+    try {
+      const completion = await client.chat.completions.create({
+        model: visionModel,
+        max_tokens: 400,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this reference image for a brand video creative. Brand context: ${brandContext}
 
 Return a concise style guide (2-4 sentences) covering: color palette, lighting, backdrop/setting, mood, and how to adapt models/subjects so they don't look like real identifiable people. No markdown.`,
-            },
-            {
-              type: "image_url",
-              image_url: { url: imageUrl },
-            },
-          ],
-        },
-      ],
-    });
+              },
+              {
+                type: "image_url",
+                image_url: { url: imageUrl },
+              },
+            ],
+          },
+        ],
+      });
 
-    return (
-      completion.choices[0]?.message?.content?.trim() ||
-      "Warm commercial aesthetic with soft lighting and neutral backdrop."
-    );
-  } catch {
-    return "Warm commercial aesthetic with soft lighting and neutral backdrop.";
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (text) return text;
+    } catch {
+      // try next vision model
+    }
   }
+
+  return "Warm commercial aesthetic with soft lighting and neutral backdrop.";
 }
 
 export async function enhanceVisualPrompt(

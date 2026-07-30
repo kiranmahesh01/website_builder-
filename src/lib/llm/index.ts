@@ -4,6 +4,10 @@ import { generateWithGemini } from "./gemini";
 import { generateWithOpenAI } from "./openai";
 import { generateWithOpenRouter } from "./openrouter";
 import { generateOpenRouterBestOf } from "./openrouter-best";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  PAID_FALLBACK_MODEL,
+} from "./openrouter-models";
 import type { Website } from "@/lib/schema";
 import {
   buildBriefUserMessage,
@@ -229,7 +233,7 @@ async function generateWebsiteLegacy(
             raw: retry.raw,
             mode: "schema",
             meta: {
-              model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+              model: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
               score: scoreWebsite(retry.data),
               adherence: retry.adherence,
               attempts: best.attempts + 1,
@@ -287,7 +291,7 @@ async function generateWebsiteLegacy(
         raw: single.raw,
         mode: "schema",
         meta: {
-          model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+          model: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
           score: scoreWebsite(single.data),
           adherence: single.adherence,
           attempts: 2,
