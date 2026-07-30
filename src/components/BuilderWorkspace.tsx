@@ -86,6 +86,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [error, setError] = useState("");
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [fastMode, setFastMode] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
@@ -198,6 +199,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           prompt: value,
           provider,
           projectId: project?.id,
+          fast: fastMode,
         }),
         signal: controller.signal,
       });
@@ -388,6 +390,16 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           <div className="hidden rounded-full border border-[var(--line)] p-0.5 sm:flex">
             <button
               type="button"
+              onClick={() => setFastMode((v) => !v)}
+              className={`rounded-full px-3 py-1 text-xs ${fastMode ? "bg-lime/20 text-lime" : "text-mist"}`}
+              title="Fast mode: quicker generation, still follows your brief"
+            >
+              Fast
+            </button>
+          </div>
+          <div className="hidden rounded-full border border-[var(--line)] p-0.5 sm:flex">
+            <button
+              type="button"
               onClick={() => setDevice("desktop")}
               className={`rounded-full px-3 py-1 text-xs ${device === "desktop" ? "bg-fog text-ink" : "text-mist"}`}
             >
@@ -449,8 +461,10 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-mist">
-                Describe the site you want. Magic AI generates structured
-                sections (schema → renderer), then you refine and publish.
+                <p className="text-fog">Tip: be specific — name your business, city, style, and sections you want.</p>
+                <p className="mt-2 text-xs">
+                  Example: &quot;Brooklyn orchid boutique called Petal &amp; Stem — online shop, pickup, warm editorial vibe, green accents&quot;
+                </p>
               </div>
             ) : null}
             {messages.map((m, i) => (
@@ -484,6 +498,11 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
                 placeholder="What kind of website do you want to build?"
                 className="mb-2 w-full resize-none rounded-2xl border border-[var(--line)] bg-ink-soft px-3 py-2 text-sm outline-none focus:border-lime/40"
               />
+            ) : null}
+            {!project?.html ? (
+              <p className="mb-2 text-[11px] text-mist">
+                Include: business name, location, offer, vibe (e.g. minimal, rustic), and sections (menu, pricing, booking).
+              </p>
             ) : null}
             <div className="flex gap-2">
               <input

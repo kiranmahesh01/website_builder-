@@ -5,11 +5,19 @@ import { generateWithOpenAI } from "./openai";
 import { generateWithOpenRouter } from "./openrouter";
 import { generateOpenRouterBestOf } from "./openrouter-best";
 import type { Website } from "@/lib/schema";
+import {
+  buildBriefUserMessage,
+  parseBrief,
+  scoreBriefAdherence,
+} from "@/lib/brief-parser";
 import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { renderWebsiteToHtml } from "@/lib/render-site";
+import { scoreWebsite } from "./score-site";
 import {
+  fastModePromptAppendix,
   SITE_JSON_SYSTEM_PROMPT,
   SITE_REFINE_SYSTEM_PROMPT,
+  SITE_RETRY_SYSTEM_APPENDIX,
 } from "@/lib/site-prompt";
 import {
   availableProviders,
@@ -22,10 +30,13 @@ import {
   type LlmProvider,
 } from "./types";
 
+const ADHERENCE_RETRY_THRESHOLD = 52;
+
 async function generateWithProvider(
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
   messages: ChatMessage[],
   model?: string | null,
+  options?: { maxTokens?: number },
 ): Promise<string> {
   if (provider === "openai") {
     return generateWithOpenAI(messages, { model: model || undefined });
@@ -34,9 +45,84 @@ async function generateWithProvider(
     return generateWithGemini(messages, { model: model || undefined });
   }
   if (provider === "openrouter") {
-    return generateWithOpenRouter(messages, { model: model || undefined });
+    return generateWithOpenRouter(messages, {
+      model: model || undefined,
+      maxTokens: options?.maxTokens,
+    });
   }
   return generateWithBytez(messages, { model: model || undefined });
+}
+
+function buildGenerationMessages(
+  prompt: string,
+  options?: { fast?: boolean; retry?: boolean },
+): ChatMessage[] {
+  const brief = parseBrief(prompt);
+  const system = options?.retry
+    ? `${SITE_JSON_SYSTEM_PROMPT}\n${SITE_RETRY_SYSTEM_APPENDIX}`
+    : SITE_JSON_SYSTEM_PROMPT + (options?.fast ? fastModePromptAppendix() : "");
+
+  return [
+    { role: "system", content: system },
+    {
+      role: "user",
+      content: buildBriefUserMessage(brief, { fast: options?.fast }),
+    },
+  ];
+}
+
+async function generateStructuredOnce(
+  provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
+  prompt: string,
+  model: string | null | undefined,
+  options?: { fast?: boolean; retry?: boolean },
+): Promise<{ data: Website; raw: string; adherence: number } | null> {
+  const messages = buildGenerationMessages(prompt, options);
+  const maxTokens = options?.fast ? 3800 : 6500;
+  const raw = await generateWithProvider(provider, messages, model, {
+    maxTokens,
+  });
+  const json = extractJsonObject(raw);
+  const data = json ? parseWebsiteLenient(json) : null;
+  if (!data) return null;
+  const adherence = scoreBriefAdherence(data, parseBrief(prompt));
+  return { data, raw, adherence };
+}
+
+async function generateWithAdherenceRetry(
+  provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
+  prompt: string,
+  model?: string | null,
+  options?: { fast?: boolean },
+): Promise<{
+  data: Website;
+  raw: string;
+  adherence: number;
+  retried: boolean;
+}> {
+  const first = await generateStructuredOnce(provider, prompt, model, options);
+  if (!first) {
+    throw new Error("Model returned invalid site JSON. Try again or shorten your brief.");
+  }
+
+  if (first.adherence >= ADHERENCE_RETRY_THRESHOLD) {
+    return { ...first, retried: false };
+  }
+
+  console.warn(
+    `Brief adherence ${first.adherence} below ${ADHERENCE_RETRY_THRESHOLD}, retrying with stricter prompt`,
+  );
+
+  const second = await generateStructuredOnce(provider, prompt, model, {
+    ...options,
+    retry: true,
+  });
+
+  if (!second) return { ...first, retried: true };
+  if (second.adherence >= first.adherence) {
+    return { ...second, retried: true };
+  }
+  return { ...first, retried: true };
 }
 
 export type GenerateResult = {
@@ -48,9 +134,11 @@ export type GenerateResult = {
   meta?: {
     model?: string;
     score?: number;
+    adherence?: number;
     attempts?: number;
     validCount?: number;
     modelsTried?: string[];
+    retried?: boolean;
   };
 };
 
@@ -58,6 +146,7 @@ export async function generateWebsite(input: {
   prompt: string;
   provider?: string | null;
   model?: string | null;
+  fast?: boolean;
 }): Promise<GenerateResult> {
   const provider = resolveProvider(input.provider);
 
@@ -72,17 +161,39 @@ export async function generateWebsite(input: {
     };
   }
 
-  const messages: ChatMessage[] = [
-    { role: "system", content: SITE_JSON_SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: `Build a complete multi-page website JSON for this brief:\n\n${input.prompt}`,
-    },
-  ];
-
   if (provider === "openrouter-best") {
+    const messages = buildGenerationMessages(input.prompt, {
+      fast: input.fast,
+    });
     try {
-      const best = await generateOpenRouterBestOf(messages);
+      const best = await generateOpenRouterBestOf(messages, input.prompt);
+      let adherence = scoreBriefAdherence(best.site, parseBrief(input.prompt));
+
+      if (adherence < ADHERENCE_RETRY_THRESHOLD) {
+        const retry = await generateStructuredOnce(
+          "openrouter",
+          input.prompt,
+          input.model,
+          { fast: input.fast, retry: true },
+        );
+        if (retry && retry.adherence > adherence) {
+          return {
+            html: await renderWebsiteToHtml(retry.data),
+            data: retry.data,
+            provider: "openrouter",
+            raw: retry.raw,
+            mode: "schema",
+            meta: {
+              model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+              score: scoreWebsite(retry.data),
+              adherence: retry.adherence,
+              attempts: best.attempts + 1,
+              retried: true,
+            },
+          };
+        }
+      }
+
       return {
         html: await renderWebsiteToHtml(best.site),
         data: best.site,
@@ -92,85 +203,57 @@ export async function generateWebsite(input: {
         meta: {
           model: best.model,
           score: best.score,
+          adherence,
           attempts: best.attempts,
           validCount: best.validCount,
           modelsTried: best.modelsTried,
         },
       };
     } catch (raceError) {
-      // Final safety net: local demo templates so the builder never hard-fails.
-      console.error("openrouter-best failed, using demo fallback", raceError);
-      const data = generateWebsiteData(input.prompt);
+      console.error("openrouter-best failed, falling back to single model", raceError);
+      const single = await generateWithAdherenceRetry(
+        "openrouter",
+        input.prompt,
+        input.model,
+        { fast: input.fast },
+      );
       return {
-        html: await renderWebsiteToHtml(data),
-        data,
-        provider: "demo",
-        raw: JSON.stringify(data),
+        html: await renderWebsiteToHtml(single.data),
+        data: single.data,
+        provider: "openrouter",
+        raw: single.raw,
         mode: "schema",
         meta: {
-          model: "demo-fallback",
-          score: 0,
-          attempts: 0,
-          validCount: 1,
-          modelsTried: ["demo"],
+          model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+          score: scoreWebsite(single.data),
+          adherence: single.adherence,
+          attempts: 2,
+          retried: single.retried,
         },
       };
     }
   }
 
-  try {
-    const raw = await generateWithProvider(provider, messages, input.model);
-    const json = extractJsonObject(raw);
-    const data = json ? parseWebsiteLenient(json) : null;
+  const result = await generateWithAdherenceRetry(
+    provider,
+    input.prompt,
+    input.model,
+    { fast: input.fast },
+  );
 
-    if (data) {
-      return {
-        html: await renderWebsiteToHtml(data),
-        data,
-        provider,
-        raw,
-        mode: "schema",
-      };
-    }
-
-    // Fallback: ask again as raw HTML if the model ignored JSON instructions
-    const htmlMessages: ChatMessage[] = [
-      { role: "system", content: WEBSITE_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Build a complete website for this brief:\n\n${input.prompt}`,
-      },
-    ];
-    const htmlRaw = await generateWithProvider(
-      provider,
-      htmlMessages,
-      input.model,
-    );
-    return {
-      html: extractHtml(htmlRaw),
-      data: null,
-      provider,
-      raw: htmlRaw,
-      mode: "html",
-    };
-  } catch (error) {
-    console.error("generate provider failed, using demo fallback", error);
-    const data = generateWebsiteData(input.prompt);
-    return {
-      html: await renderWebsiteToHtml(data),
-      data,
-      provider: "demo",
-      raw: JSON.stringify(data),
-      mode: "schema",
-      meta: {
-        model: "demo-fallback",
-        score: 0,
-        attempts: 0,
-        validCount: 1,
-        modelsTried: ["demo"],
-      },
-    };
-  }
+  return {
+    html: await renderWebsiteToHtml(result.data),
+    data: result.data,
+    provider,
+    raw: result.raw,
+    mode: "schema",
+    meta: {
+      score: scoreWebsite(result.data),
+      adherence: result.adherence,
+      retried: result.retried,
+      attempts: result.retried ? 2 : 1,
+    },
+  };
 }
 
 /** @deprecated Use generateWebsite */
@@ -178,6 +261,7 @@ export async function generateWebsiteHtml(input: {
   prompt: string;
   provider?: string | null;
   model?: string | null;
+  fast?: boolean;
 }): Promise<{ html: string; provider: LlmProvider; raw: string }> {
   const result = await generateWebsite(input);
   return { html: result.html, provider: result.provider, raw: result.raw };
@@ -212,7 +296,7 @@ export async function refineWebsite(input: {
       html: await renderWebsiteToHtml(data),
       data,
       provider,
-      reply: `Updated the structured site in demo mode based on: "${input.instruction}"`,
+      reply: `Applied your change in demo mode: "${input.instruction}"`,
       mode: "schema",
     };
   }
@@ -225,30 +309,34 @@ export async function refineWebsite(input: {
     }));
 
   if (input.currentData) {
+    const briefNote = input.originalPrompt
+      ? `\n\nOriginal client brief (keep honoring this):\n${input.originalPrompt}`
+      : "";
     const messages: ChatMessage[] = [
       { role: "system", content: SITE_REFINE_SYSTEM_PROMPT },
       ...historyMessages,
       {
         role: "user",
-        content: `Current website JSON:\n\n${JSON.stringify(input.currentData)}\n\nChange request:\n${input.instruction}`,
+        content: `Current website JSON:\n\n${JSON.stringify(input.currentData)}${briefNote}\n\nChange request (apply exactly):\n${input.instruction}`,
       },
     ];
 
     if (provider === "openrouter-best") {
       try {
-        const best = await generateOpenRouterBestOf(messages);
+        const best = await generateOpenRouterBestOf(
+          messages,
+          input.originalPrompt || input.instruction,
+        );
         return {
           html: await renderWebsiteToHtml(best.site),
           data: best.site,
           provider,
-          reply: `Race: first valid update from ${best.model} (score ${best.score}) among ${best.attempts} free models. Based on: "${input.instruction}"`,
+          reply: `Updated based on: "${input.instruction}"`,
           mode: "schema",
           meta: {
             model: best.model,
             score: best.score,
             attempts: best.attempts,
-            validCount: best.validCount,
-            modelsTried: best.modelsTried,
           },
         };
       } catch {
@@ -262,6 +350,7 @@ export async function refineWebsite(input: {
       singleProvider,
       messages,
       input.model,
+      { maxTokens: 6500 },
     );
     const json = extractJsonObject(raw);
     const data = json ? parseWebsiteLenient(json) : null;
@@ -270,13 +359,12 @@ export async function refineWebsite(input: {
         html: await renderWebsiteToHtml(data),
         data,
         provider,
-        reply: `Updated the structured site based on: "${input.instruction}"`,
+        reply: `Updated based on: "${input.instruction}"`,
         mode: "schema",
       };
     }
   }
 
-  // HTML fallback (legacy projects or failed JSON refine)
   const messages: ChatMessage[] = [
     { role: "system", content: REFINE_SYSTEM_PROMPT },
     ...historyMessages,
@@ -296,7 +384,7 @@ export async function refineWebsite(input: {
     html: extractHtml(raw),
     data: null,
     provider,
-    reply: `Updated the site based on: "${input.instruction}"`,
+    reply: `Updated based on: "${input.instruction}"`,
     mode: "html",
   };
 }

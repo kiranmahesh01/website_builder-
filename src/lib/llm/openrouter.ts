@@ -18,7 +18,7 @@ function supportsJsonObject(model: string): boolean {
 
 export async function generateWithOpenRouter(
   messages: ChatMessage[],
-  options?: { model?: string; json?: boolean },
+  options?: { model?: string; json?: boolean; maxTokens?: number },
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
@@ -36,22 +36,24 @@ export async function generateWithOpenRouter(
   const model =
     options?.model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 
+  const maxTokens = options?.maxTokens ?? 6500;
   const wantJson = options?.json === true && supportsJsonObject(model);
 
   try {
     const completion = await client.chat.completions.create({
       model,
-      temperature: 0.65,
-      max_tokens: 8192,
+      temperature: 0.45,
+      max_tokens: maxTokens,
       ...(wantJson ? { response_format: { type: "json_object" } } : {}),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
     const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error(`OpenRouter (${model}) returned an empty response`);
+    if (!content) {
+      throw new Error(`OpenRouter (${model}) returned an empty response`);
+    }
     return content;
   } catch (error) {
-    // Retry once without JSON mode — some OpenRouter routes reject response_format.
     if (
       wantJson &&
       error instanceof Error &&
@@ -60,8 +62,8 @@ export async function generateWithOpenRouter(
       try {
         const completion = await client.chat.completions.create({
           model,
-          temperature: 0.65,
-          max_tokens: 8192,
+          temperature: 0.45,
+          max_tokens: maxTokens,
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
         });
         const content = completion.choices[0]?.message?.content;
@@ -88,7 +90,7 @@ export async function generateWithOpenRouter(
     }
     if (/429|rate/i.test(message)) {
       throw new Error(
-        "OpenRouter rate limit hit. Wait a moment and try again, or switch to OpenRouter (single model).",
+        "OpenRouter rate limit hit. Wait a moment and try again.",
       );
     }
     throw new Error(`OpenRouter (${model}): ${message}`);

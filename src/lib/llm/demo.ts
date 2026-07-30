@@ -116,6 +116,31 @@ function pickTheme(prompt: string): ThemePick {
   return THEMES.default;
 }
 
+function keywordsFromPrompt(prompt: string): string | null {
+  const stop = new Set([
+    "website", "site", "landing", "page", "build", "create", "make", "design",
+    "online", "modern", "beautiful", "simple", "minimal", "portfolio",
+  ]);
+  const tokens = prompt
+    .replace(/[^a-zA-Z0-9\s'-]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !stop.has(t.toLowerCase()));
+  if (tokens.length >= 2) return tokens.slice(0, 4).join(" ");
+  return null;
+}
+
+function extractHeadlineFromPrompt(prompt: string, brand: string): string {
+  const quoted = prompt.match(/["']([^"']{4,60})["']/);
+  if (quoted?.[1]) return quoted[1];
+
+  const firstSentence = prompt.split(/[.!?]/)[0]?.trim();
+  if (firstSentence && firstSentence.length >= 12 && firstSentence.length <= 72) {
+    return firstSentence.charAt(0).toUpperCase() + firstSentence.slice(1);
+  }
+
+  return `${brand}`;
+}
+
 function titleCase(words: string): string {
   return words
     .split(/\s+/)
@@ -232,8 +257,11 @@ export function generateWebsiteData(
   const brand = extractBrand(prompt);
   const p = prompt.toLowerCase();
 
-  let headline = `Built for ${brand}`;
-  let support = `A focused presence for ${prompt.replace(/\s+/g, " ").trim().slice(0, 80)}.`;
+  let headline = extractHeadlineFromPrompt(prompt, brand);
+  let support = prompt.replace(/\s+/g, " ").trim().slice(0, 160);
+  if (support.length < 20) {
+    support = `A focused presence for ${brand} — built around what you asked for.`;
+  }
   let cta = "Get started";
 
   if (/shop|store|boutique|buy|product/.test(p)) {
@@ -329,14 +357,14 @@ export function generateWebsiteData(
       ],
     });
   } else {
-    homeSections.push({
+    homeSections.push(    {
       type: "features",
-      headline: "Designed to convert attention",
-      subheadline: "One job per section. Clear hierarchy. Room to grow.",
+      headline: keywordsFromPrompt(prompt) || "What we offer",
+      subheadline: support.slice(0, 100),
       items: [
         {
-          title: "Why it works",
-          body: `${brand} leads with a clear offer so visitors decide quickly.`,
+          title: keywordsFromPrompt(prompt)?.split(" ")[0] || "Core offer",
+          body: support,
         },
         {
           title: "What you get",

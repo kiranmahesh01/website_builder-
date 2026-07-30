@@ -15,6 +15,7 @@ const schema = z.object({
     .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
   projectId: z.string().optional(),
+  fast: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -44,12 +45,15 @@ export async function POST(req: Request) {
     const { html, data, provider, meta } = await generateWebsite({
       prompt: parsed.data.prompt,
       provider: parsed.data.provider,
+      fast: parsed.data.fast,
     });
 
     const title = data?.brand || titleFromPrompt(parsed.data.prompt);
-    const assistantMsg = meta?.model
-      ? `Race: first valid site from ${meta.model} (score ${meta.score}) among ${meta.attempts} free models. Preview on the right.`
-      : "Generated your website from structured sections. Preview it on the right — ask me to refine anything.";
+    const assistantMsg = meta?.adherence != null && meta.adherence < 55
+      ? `Built your site from your brief (matched ${meta.adherence}% of your keywords — try refining in chat for more specificity). Preview on the right.`
+      : meta?.model
+        ? `Built from your brief with ${meta.model}${meta.retried ? " (refined for accuracy)" : ""}. Preview on the right — ask me to change anything.`
+        : "Generated your website from your brief. Preview on the right — refine in chat anytime.";
 
     const projectData = {
       title,
