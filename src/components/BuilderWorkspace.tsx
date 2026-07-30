@@ -19,14 +19,6 @@ import {
   type SiteThemeName,
 } from "@/lib/themes";
 
-type Provider =
-  | "openai"
-  | "gemini"
-  | "bytez"
-  | "openrouter"
-  | "openrouter-best"
-  | "demo";
-
 type Message = {
   id?: string;
   role: string;
@@ -66,7 +58,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [project, setProject] = useState<ProjectState | null>(null);
-  const [provider, setProvider] = useState<Provider>("demo");
   const [bootError, setBootError] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -100,14 +91,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           setBootError("Could not connect to generation. Try again in a moment.");
           return;
         }
-        const providersData = await providersRes.json();
-        const preferred = providersData.defaults?.provider as Provider | undefined;
-        const list = (providersData.providers || []) as Provider[];
-        if (list.includes(preferred!)) {
-          setProvider(preferred!);
-        } else if (list.length) {
-          setProvider(list[0]);
-        }
 
         if (projectId) {
           const res = await fetch(`/api/projects/${projectId}`);
@@ -124,9 +107,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           const data = await res.json();
           setProject(data.project);
           setMessages(data.messages || []);
-          if (data.project.provider && list.includes(data.project.provider)) {
-            setProvider(data.project.provider);
-          }
           if (data.project.published && data.project.slug) {
             setPublishUrl(`/s/${data.project.slug}`);
           }
@@ -185,7 +165,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: value,
-          provider,
           projectId: project?.id,
           theme: siteTheme,
         }),
@@ -283,7 +262,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         body: JSON.stringify({
           projectId: project.id,
           message: value,
-          provider,
         }),
       });
       const data = await res.json();

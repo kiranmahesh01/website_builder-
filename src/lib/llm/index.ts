@@ -33,6 +33,7 @@ import {
   availableProviders,
   extractHtml,
   extractJsonObject,
+  getDefaultProvider,
   REFINE_SYSTEM_PROMPT,
   resolveProvider,
   WEBSITE_SYSTEM_PROMPT,
@@ -521,5 +522,5 @@ export async function refineWebsiteHtml(input: {
   };
 }
 
-export { availableProviders, resolveProvider };
+export { availableProviders, resolveProvider, getDefaultProvider };
 export type { LlmProvider };

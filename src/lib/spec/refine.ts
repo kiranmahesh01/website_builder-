@@ -1,5 +1,5 @@
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
-import { extractJsonObject, type LlmProvider } from "@/lib/llm/types";
+import { extractJsonObject, getDefaultProvider, type LlmProvider } from "@/lib/llm/types";
 import type { SiteSpec } from "./schema";
 import { parseSiteSpec } from "./schema";
 
@@ -17,10 +17,9 @@ export async function refineSiteSpec(input: {
   instruction: string;
   provider?: LlmProvider;
 }): Promise<SiteSpec> {
-  const provider =
-    input.provider === "demo" || input.provider === "openrouter-best"
-      ? "openrouter"
-      : input.provider || "openrouter";
+  const provider = input.provider && input.provider !== "demo"
+    ? input.provider
+    : getDefaultProvider();
 
   const messages = [
     { role: "system" as const, content: REFINE_SPEC_PROMPT },

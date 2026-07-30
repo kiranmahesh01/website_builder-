@@ -13,16 +13,26 @@ export type ChatMessage = {
 
 export function availableProviders(): LlmProvider[] {
   const providers: LlmProvider[] = [];
+  if (process.env.OPENROUTER_API_KEY) {
+    providers.push("openrouter");
+  }
   if (process.env.OPENAI_API_KEY) providers.push("openai");
   if (process.env.GOOGLE_AI_API_KEY) providers.push("gemini");
   if (process.env.BYTEZ_API_KEY) providers.push("bytez");
   if (process.env.OPENROUTER_API_KEY) {
-    providers.push("openrouter");
     providers.push("openrouter-best");
   }
-  // Always available as a no-key fallback so Generate works out of the box.
   providers.push("demo");
   return providers;
+}
+
+/** Production default: OpenRouter when key is set, else first available, else demo. */
+export function getDefaultProvider(): LlmProvider {
+  if (process.env.OPENROUTER_API_KEY) return "openrouter";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.GOOGLE_AI_API_KEY) return "gemini";
+  if (process.env.BYTEZ_API_KEY) return "bytez";
+  return "demo";
 }
 
 function missingProviderMessage(provider: LlmProvider): string {
@@ -43,6 +53,18 @@ function missingProviderMessage(provider: LlmProvider): string {
 
 export function resolveProvider(preferred?: string | null): LlmProvider {
   const available = availableProviders();
+
+  // OpenRouter is the primary provider — use it whenever the key is configured.
+  if (process.env.OPENROUTER_API_KEY && preferred !== "demo") {
+    if (preferred === "openrouter-best" && available.includes("openrouter-best")) {
+      return "openrouter-best";
+    }
+    if (preferred === "openai" && available.includes("openai")) return "openai";
+    if (preferred === "gemini" && available.includes("gemini")) return "gemini";
+    if (preferred === "bytez" && available.includes("bytez")) return "bytez";
+    return "openrouter";
+  }
+
   if (
     preferred === "openai" ||
     preferred === "gemini" ||
@@ -62,12 +84,17 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
       throw new Error(missingProviderMessage(preferred));
     }
   }
-  const fallback = (process.env.DEFAULT_LLM_PROVIDER ||
-    (process.env.OPENROUTER_API_KEY ? "openrouter" : "demo")) as LlmProvider;
-  if (fallback && available.includes(fallback)) return fallback;
+
+  const fromEnv = process.env.DEFAULT_LLM_PROVIDER as LlmProvider | undefined;
+  if (fromEnv && fromEnv !== "demo" && available.includes(fromEnv)) {
+    return fromEnv;
+  }
+
+  const fallback = getDefaultProvider();
+  if (available.includes(fallback)) return fallback;
   if (available[0]) return available[0];
   throw new Error(
-    "No LLM providers available. Set OPENAI_API_KEY / GOOGLE_AI_API_KEY / BYTEZ_API_KEY / OPENROUTER_API_KEY, or use DEFAULT_LLM_PROVIDER=demo.",
+    "No LLM providers available. Set OPENROUTER_API_KEY in Vercel env (https://openrouter.ai/keys).",
   );
 }
 

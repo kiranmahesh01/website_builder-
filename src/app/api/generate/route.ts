@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { availableProviders, generateWebsite } from "@/lib/llm";
+import { getDefaultProvider } from "@/lib/llm/types";
 import { serializeProjectData, serializeSiteData } from "@/lib/site-data";
 import { assertCanCreateProject } from "@/lib/tier";
 import { titleFromPrompt } from "@/lib/utils";
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
 
     const { html, data, spec, provider, meta } = await generateWebsite({
       prompt: parsed.data.prompt,
-      provider: parsed.data.provider,
+      provider: getDefaultProvider(),
       fast: parsed.data.fast,
       theme: parsed.data.theme,
     });

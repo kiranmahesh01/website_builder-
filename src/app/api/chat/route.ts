@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { refineWebsite } from "@/lib/llm";
+import { getDefaultProvider } from "@/lib/llm/types";
 import { renderSpecToHtml } from "@/lib/render-site";
 import { refineSiteSpec } from "@/lib/spec/refine";
 import { specToWebsite } from "@/lib/spec/to-website";
@@ -53,13 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const provider = (parsed.data.provider || project.provider) as
-      | "openai"
-      | "gemini"
-      | "bytez"
-      | "openrouter"
-      | "openrouter-best"
-      | "demo";
+    const provider = getDefaultProvider();
 
     const existing = deserializeProjectData(project.data);
     let html: string;
