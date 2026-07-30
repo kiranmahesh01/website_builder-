@@ -43,6 +43,10 @@ prisma/*.db-journal
 # vercel
 .vercel
 
+# neon agent skills
+.agents/
+skills-lock.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

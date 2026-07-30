@@ -1,3 +1,4 @@
+import { put } from "@vercel/blob";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
@@ -19,14 +20,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Max 5MB" }, { status: 400 });
   }
 
-  const bytes = Buffer.from(await file.arrayBuffer());
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const name = `${Date.now()}-${safe}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, name), bytes);
 
-  const url = `/uploads/${name}`;
+  let url: string;
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`uploads/${name}`, file, {
+      access: "public",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    url = blob.url;
+  } else {
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const dir = path.join(process.cwd(), "public", "uploads");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, name), bytes);
+    url = `/uploads/${name}`;
+  }
+
   const asset = await prisma.asset.create({
     data: {
       name: file.name,
