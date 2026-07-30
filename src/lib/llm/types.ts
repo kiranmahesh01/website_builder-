@@ -3,6 +3,7 @@ export type LlmProvider =
   | "gemini"
   | "bytez"
   | "openrouter"
+  | "openrouter-best"
   | "demo";
 
 export type ChatMessage = {
@@ -15,7 +16,10 @@ export function availableProviders(): LlmProvider[] {
   if (process.env.OPENAI_API_KEY) providers.push("openai");
   if (process.env.GOOGLE_AI_API_KEY) providers.push("gemini");
   if (process.env.BYTEZ_API_KEY) providers.push("bytez");
-  if (process.env.OPENROUTER_API_KEY) providers.push("openrouter");
+  if (process.env.OPENROUTER_API_KEY) {
+    providers.push("openrouter-best");
+    providers.push("openrouter");
+  }
   // Always available as a no-key fallback so Generate works out of the box.
   providers.push("demo");
   return providers;
@@ -30,6 +34,7 @@ function missingProviderMessage(provider: LlmProvider): string {
     case "bytez":
       return "Bytez is not configured. Set BYTEZ_API_KEY in .env (free key: https://bytez.com/api/key), or switch to Demo (no API key).";
     case "openrouter":
+    case "openrouter-best":
       return "OpenRouter is not configured. Set OPENROUTER_API_KEY in .env (https://openrouter.ai/keys), or switch to Demo (no API key).";
     default:
       return "Provider is not configured.";
@@ -43,6 +48,7 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
     preferred === "gemini" ||
     preferred === "bytez" ||
     preferred === "openrouter" ||
+    preferred === "openrouter-best" ||
     preferred === "demo"
   ) {
     if (available.includes(preferred)) return preferred;
@@ -50,7 +56,8 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
       preferred === "openai" ||
       preferred === "gemini" ||
       preferred === "bytez" ||
-      preferred === "openrouter"
+      preferred === "openrouter" ||
+      preferred === "openrouter-best"
     ) {
       throw new Error(missingProviderMessage(preferred));
     }

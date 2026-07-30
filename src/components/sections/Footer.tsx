@@ -30,9 +30,9 @@ export function Footer(props: FooterProps) {
             </Muted>
           ) : null}
         </div>
-        {props.links.length ? (
+        {(props.links || []).length ? (
           <nav style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            {props.links.map((link) => (
+            {(props.links || []).map((link) => (
               <a
                 key={`${link.label}-${link.href}`}
                 href={link.href}

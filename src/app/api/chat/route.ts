@@ -4,12 +4,13 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { refineWebsite } from "@/lib/llm";
 import { deserializeSiteData, serializeSiteData } from "@/lib/site-data";
+import { snapshotProjectVersion } from "@/lib/versions";
 
 const schema = z.object({
   projectId: z.string().min(1),
   message: z.string().min(1).max(4000),
   provider: z
-    .enum(["openai", "gemini", "bytez", "openrouter", "demo"])
+    .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
 });
 
@@ -56,12 +57,17 @@ export async function POST(req: Request) {
       originalPrompt: project.prompt,
     });
 
+    await snapshotProjectVersion(project.id, "Before refine");
+
     const updated = await prisma.project.update({
       where: { id: project.id },
       data: {
         html,
         data: serializeSiteData(data) ?? undefined,
         provider,
+        seoTitle: data?.seo?.title || undefined,
+        seoDescription: data?.seo?.description || undefined,
+        logoUrl: data?.logoUrl || undefined,
         messages: {
           create: [
             { role: "user", content: parsed.data.message },
@@ -83,6 +89,10 @@ export async function POST(req: Request) {
         provider: updated.provider,
         published: updated.published,
         slug: updated.slug,
+        seoTitle: updated.seoTitle,
+        seoDescription: updated.seoDescription,
+        logoUrl: updated.logoUrl,
+        customDomain: updated.customDomain,
       },
       messages: updated.messages.map((m) => ({
         id: m.id,

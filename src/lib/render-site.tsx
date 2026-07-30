@@ -25,6 +25,12 @@ export async function renderWebsiteToHtml(site: Website): Promise<string> {
   ) as ReactElement;
 
   const body = renderToStaticMarkup(tree);
+  const title = site.seo?.title || site.brand;
+  const description =
+    site.seo?.description ||
+    `Website for ${site.brand} — built with Magic AI.`;
+  const og = site.seo?.ogImage || site.logoUrl || "";
+  const keywords = (site.seo?.keywords || []).join(", ");
 
   const pageScript =
     site.pages.length > 1
@@ -53,7 +59,12 @@ export async function renderWebsiteToHtml(site: Website): Promise<string> {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(site.brand)}</title>
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}" />
+  ${keywords ? `<meta name="keywords" content="${escapeHtml(keywords)}" />` : ""}
+  <meta property="og:title" content="${escapeHtml(title)}" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  ${og ? `<meta property="og:image" content="${escapeHtml(og)}" />` : ""}
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <style>

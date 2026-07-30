@@ -18,6 +18,7 @@ model User {
   accounts     Account[]
   sessions     Session[]
   projects     Project[]
+  assets       Asset[]
 }
 
 model Account {
@@ -55,22 +56,49 @@ model VerificationToken {
 }
 
 model Project {
-  id          String    @id @default(cuid())
-  title       String
-  prompt      String
-  html        String    @default("")
-  /// Structured multi-page site JSON string (Website schema). Null for legacy HTML-only projects.
-  data        String?
-  provider    String    @default("demo")
-  model       String?
-  published   Boolean   @default(false)
-  slug        String?   @unique
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages    Message[]
+  id             String           @id @default(cuid())
+  title          String
+  prompt         String
+  html           String           @default("")
+  /// Structured multi-page site JSON string (Website schema).
+  data           String?
+  provider       String           @default("demo")
+  model          String?
+  published      Boolean          @default(false)
+  slug           String?          @unique
+  customDomain   String?          @unique
+  seoTitle       String?
+  seoDescription String?
+  logoUrl        String?
+  viewCount      Int              @default(0)
+  publishedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  versions       ProjectVersion[]
+}
+
+model ProjectVersion {
+  id        String   @id @default(cuid())
+  label     String?
+  html      String
+  data      String?
+  createdAt DateTime @default(now())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  mimeType  String?
+  size      Int?
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Message {

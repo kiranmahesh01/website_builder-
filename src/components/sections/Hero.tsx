@@ -67,6 +67,76 @@ export function Hero(props: HeroProps) {
     );
   }
 
+  if (props.layout === "centered" || props.layout === "minimal") {
+    const minimal = props.layout === "minimal";
+    return (
+      <section
+        id="top"
+        style={{
+          padding: minimal ? "4rem 0 3rem" : "5.5rem 0 4.5rem",
+          textAlign: "center",
+          background: minimal
+            ? "var(--surface)"
+            : "radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%), var(--surface)",
+        }}
+      >
+        <Wrap style={{ maxWidth: minimal ? 560 : 720 }}>
+          {props.brand ? (
+            <p
+              style={{
+                fontFamily: "var(--display)",
+                fontSize: "clamp(2.2rem, 5vw, 3.6rem)",
+                lineHeight: 0.95,
+                letterSpacing: "-0.03em",
+                margin: "0 0 1rem",
+              }}
+            >
+              {props.brand}
+            </p>
+          ) : null}
+          <DisplayHeading
+            as="h1"
+            style={{
+              fontSize: "clamp(1.6rem, 3.5vw, 2.4rem)",
+              maxWidth: "22ch",
+              marginInline: "auto",
+            }}
+          >
+            {props.headline}
+          </DisplayHeading>
+          <Muted
+            style={{
+              marginTop: "0.9rem",
+              marginInline: "auto",
+              maxWidth: "40ch",
+              fontSize: "1.05rem",
+            }}
+          >
+            {props.subheadline}
+          </Muted>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.75rem",
+              justifyContent: "center",
+              marginTop: "1.5rem",
+            }}
+          >
+            <ButtonLink href={props.primaryCta.href}>
+              {props.primaryCta.label}
+            </ButtonLink>
+            {props.secondaryCta ? (
+              <ButtonLink href={props.secondaryCta.href} ghost>
+                {props.secondaryCta.label}
+              </ButtonLink>
+            ) : null}
+          </div>
+        </Wrap>
+      </section>
+    );
+  }
+
   return (
     <section
       id="top"

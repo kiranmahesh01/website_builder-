@@ -19,9 +19,9 @@ export async function generateWithOpenRouter(
     },
   });
 
-  // Cheap Gemma on OpenRouter; override with OPENROUTER_MODEL.
+  // Default to GPT-4o mini via OpenRouter; override with OPENROUTER_MODEL.
   const model =
-    options?.model || process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it";
+    options?.model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 
   const completion = await client.chat.completions.create({
     model,

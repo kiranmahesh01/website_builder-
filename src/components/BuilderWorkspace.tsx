@@ -3,14 +3,45 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { VisualEditor } from "@/components/VisualEditor";
 
-type Provider = "openai" | "gemini" | "bytez" | "openrouter" | "demo";
+type Provider =
+  | "openai"
+  | "gemini"
+  | "bytez"
+  | "openrouter"
+  | "openrouter-best"
+  | "demo";
 
-function providerLabel(p: Provider | string): string {
-  if (p === "openai") return "OpenAI";
-  if (p === "gemini") return "Gemini";
-  if (p === "bytez") return "Bytez";
-  if (p === "openrouter") return "OpenRouter · Gemma";
+function shortModelName(model?: string): string {
+  if (!model) return "";
+  const id = model.split("/").pop() || model;
+  return id;
+}
+
+function providerLabel(
+  p: Provider | string,
+  models?: Partial<Record<string, string>>,
+): string {
+  if (p === "openai") {
+    const m = shortModelName(models?.openai);
+    return m ? `OpenAI · ${m}` : "OpenAI";
+  }
+  if (p === "gemini") {
+    const m = shortModelName(models?.gemini);
+    return m ? `Gemini · ${m}` : "Gemini";
+  }
+  if (p === "bytez") {
+    const m = shortModelName(models?.bytez);
+    return m ? `Bytez · ${m}` : "Bytez";
+  }
+  if (p === "openrouter") {
+    const m = shortModelName(models?.openrouter);
+    return m ? `OpenRouter · ${m}` : "OpenRouter";
+  }
+  if (p === "openrouter-best") {
+    return "OpenRouter · Race (free ×3)";
+  }
   if (p === "demo") return "Demo (no API key)";
   return p;
 }
@@ -29,6 +60,11 @@ type ProjectState = {
   provider: string;
   published: boolean;
   slug: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  logoUrl?: string | null;
+  customDomain?: string | null;
+  viewCount?: number;
 };
 
 type Props = {
@@ -44,11 +80,13 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [project, setProject] = useState<ProjectState | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [provider, setProvider] = useState<Provider>("demo");
+  const [models, setModels] = useState<Partial<Record<string, string>>>({});
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [showEditor, setShowEditor] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
 
@@ -65,6 +103,9 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         const providersData = await providersRes.json();
         const list = (providersData.providers || []) as Provider[];
         setProviders(list);
+        if (providersData.models) {
+          setModels(providersData.models);
+        }
         if (list.length) {
           const preferred = providersData.defaults?.provider;
           setProvider(
@@ -135,7 +176,11 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
 
     setBusy(true);
     setError("");
-    setStatus("Magic AI is designing your site…");
+    setStatus(
+      provider === "openrouter-best"
+        ? "Racing 3 free models — first valid site wins…"
+        : "Magic AI is designing your site…",
+    );
     setMessages((prev) => [
       ...prev,
       { role: "user", content: value },
@@ -231,7 +276,10 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id }),
+        body: JSON.stringify({
+          projectId: project.id,
+          customDomain: project.customDomain || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -240,13 +288,23 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       }
       setPublishUrl(data.url);
       setProject((p) =>
-        p ? { ...p, published: true, slug: data.slug } : p,
+        p
+          ? {
+              ...p,
+              published: true,
+              slug: data.slug,
+              customDomain: data.customDomain ?? p.customDomain,
+            }
+          : p,
       );
+      const domainNote = data.domainUrl
+        ? ` Custom domain preview: ${data.domainUrl}`
+        : "";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `Published! Your site is live at ${data.url}`,
+          content: `Published! Your site is live at ${data.url}.${domainNote}`,
         },
       ]);
     } catch {
@@ -281,7 +339,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
             >
               {providers.map((p) => (
                 <option key={p} value={p}>
-                  {providerLabel(p)}
+                  {providerLabel(p, models)}
                 </option>
               ))}
             </select>
@@ -320,6 +378,14 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           ) : null}
           <button
             type="button"
+            onClick={() => setShowEditor((v) => !v)}
+            disabled={!project?.data}
+            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs text-mist disabled:opacity-40"
+          >
+            {showEditor ? "Hide editor" : "Visual edit"}
+          </button>
+          <button
+            type="button"
             onClick={onPublish}
             disabled={!project?.html || busy}
             className="rounded-full bg-lime px-4 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
@@ -329,7 +395,13 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[380px_1fr]">
+      <div
+        className={`grid min-h-0 flex-1 ${
+          showEditor && project
+            ? "lg:grid-cols-[340px_1fr_340px]"
+            : "lg:grid-cols-[380px_1fr]"
+        }`}
+      >
         <aside className="flex min-h-0 flex-col border-b border-[var(--line)] lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--line)] px-4 py-3">
             <p className="text-xs uppercase tracking-[0.18em] text-mist">
@@ -445,6 +517,24 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
             </div>
           </div>
         </section>
+        {showEditor && project ? (
+          <VisualEditor
+            project={project}
+            onClose={() => setShowEditor(false)}
+            onUpdated={(p) => {
+              setProject((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      ...p,
+                      html: p.html || prev.html,
+                      data: p.data ?? prev.data,
+                    }
+                  : prev,
+              );
+            }}
+          />
+        ) : null}
       </div>
     </div>
   );

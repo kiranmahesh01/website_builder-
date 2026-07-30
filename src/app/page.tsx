@@ -54,7 +54,7 @@ export default async function HomePage() {
                 Dashboard
               </Link>
               <Link
-                href="/builder"
+                href="/onboarding"
                 className="rounded-full bg-fog px-5 py-2.5 text-sm font-semibold text-ink transition hover:bg-white"
               >
                 Start building
@@ -147,11 +147,11 @@ export default async function HomePage() {
             It&apos;s your turn to build
           </h2>
           <p className="mt-4 text-mist">
-            OpenAI and Gemini under the hood. Auth to save your work. Publish
-            when it feels right.
+            Free to use. Bring your own LLM key (or Demo). Auth to save your
+            work. Publish when it feels right.
           </p>
           <Link
-            href={session?.user ? "/builder" : "/signup"}
+            href={session?.user ? "/onboarding" : "/signup"}
             className="mt-8 inline-flex rounded-full bg-lime px-8 py-3.5 text-sm font-semibold text-ink transition hover:bg-lime-deep"
           >
             Get started free
@@ -165,7 +165,7 @@ export default async function HomePage() {
             magic ai
           </span>
           <p className="text-xs text-mist">
-            Magic AI © {new Date().getFullYear()}. Chat · Generate · Publish.
+            Magic AI © {new Date().getFullYear()}. Free · Chat · Generate · Publish.
           </p>
         </div>
       </footer>

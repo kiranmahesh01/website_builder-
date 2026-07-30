@@ -3,6 +3,7 @@ import { generateWebsiteData, refineWithDemo } from "./demo";
 import { generateWithGemini } from "./gemini";
 import { generateWithOpenAI } from "./openai";
 import { generateWithOpenRouter } from "./openrouter";
+import { generateOpenRouterBestOf } from "./openrouter-best";
 import { parseWebsite, type Website } from "@/lib/schema";
 import { renderWebsiteToHtml } from "@/lib/render-site";
 import {
@@ -21,7 +22,7 @@ import {
 } from "./types";
 
 async function generateWithProvider(
-  provider: Exclude<LlmProvider, "demo">,
+  provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
   messages: ChatMessage[],
   model?: string | null,
 ): Promise<string> {
@@ -43,6 +44,13 @@ export type GenerateResult = {
   provider: LlmProvider;
   raw: string;
   mode: "schema" | "html";
+  meta?: {
+    model?: string;
+    score?: number;
+    attempts?: number;
+    validCount?: number;
+    modelsTried?: string[];
+  };
 };
 
 export async function generateWebsite(input: {
@@ -70,6 +78,24 @@ export async function generateWebsite(input: {
       content: `Build a complete multi-page website JSON for this brief:\n\n${input.prompt}`,
     },
   ];
+
+  if (provider === "openrouter-best") {
+    const best = await generateOpenRouterBestOf(messages);
+    return {
+      html: await renderWebsiteToHtml(best.site),
+      data: best.site,
+      provider,
+      raw: best.raw,
+      mode: "schema",
+      meta: {
+        model: best.model,
+        score: best.score,
+        attempts: best.attempts,
+        validCount: best.validCount,
+        modelsTried: best.modelsTried,
+      },
+    };
+  }
 
   const raw = await generateWithProvider(provider, messages, input.model);
   const json = extractJsonObject(raw);
@@ -127,6 +153,7 @@ export async function refineWebsite(input: {
   provider: LlmProvider;
   reply: string;
   mode: "schema" | "html";
+  meta?: GenerateResult["meta"];
 }> {
   const provider = resolveProvider(input.provider);
 
@@ -162,7 +189,36 @@ export async function refineWebsite(input: {
         content: `Current website JSON:\n\n${JSON.stringify(input.currentData)}\n\nChange request:\n${input.instruction}`,
       },
     ];
-    const raw = await generateWithProvider(provider, messages, input.model);
+
+    if (provider === "openrouter-best") {
+      try {
+        const best = await generateOpenRouterBestOf(messages);
+        return {
+          html: await renderWebsiteToHtml(best.site),
+          data: best.site,
+          provider,
+          reply: `Race: first valid update from ${best.model} (score ${best.score}) among ${best.attempts} free models. Based on: "${input.instruction}"`,
+          mode: "schema",
+          meta: {
+            model: best.model,
+            score: best.score,
+            attempts: best.attempts,
+            validCount: best.validCount,
+            modelsTried: best.modelsTried,
+          },
+        };
+      } catch {
+        // fall through to single openrouter refine
+      }
+    }
+
+    const singleProvider =
+      provider === "openrouter-best" ? "openrouter" : provider;
+    const raw = await generateWithProvider(
+      singleProvider,
+      messages,
+      input.model,
+    );
     const json = extractJsonObject(raw);
     const data = json ? parseWebsite(json) : null;
     if (data) {
@@ -185,7 +241,13 @@ export async function refineWebsite(input: {
       content: `Current website HTML:\n\n${input.currentHtml}\n\nChange request:\n${input.instruction}`,
     },
   ];
-  const raw = await generateWithProvider(provider, messages, input.model);
+  const fallbackProvider =
+    provider === "openrouter-best" ? "openrouter" : provider;
+  const raw = await generateWithProvider(
+    fallbackProvider,
+    messages,
+    input.model,
+  );
   return {
     html: extractHtml(raw),
     data: null,

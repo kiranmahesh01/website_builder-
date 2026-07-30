@@ -47,7 +47,7 @@ export function Nav(props: NavProps) {
             flexWrap: "wrap",
           }}
         >
-          {props.links.map((link) => (
+          {(props.links || []).map((link) => (
             <a
               key={`${link.label}-${link.href}`}
               href={link.href}

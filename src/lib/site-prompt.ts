@@ -5,6 +5,8 @@ You output a multi-page website as STRICT JSON matching this TypeScript shape (n
 
 {
   "brand": string,
+  "logoUrl": optional string,
+  "seo": { "title"?: string, "description"?: string, "ogImage"?: string, "keywords"?: string[] },
   "theme": {
     "primary": "#hex",
     "accent": "#hex",
@@ -28,22 +30,26 @@ You output a multi-page website as STRICT JSON matching this TypeScript shape (n
 
 Allowed section types: ${SECTION_TYPES.join(", ")}.
 Each section MUST include "type" and the fields for that type:
-- nav: brand, links[{label,href}], optional cta{label,href}
-- hero: headline, subheadline, primaryCta{label,href}, optional brand/secondaryCta/imageUrl, layout "fullscreen"|"split"
-- features: headline, optional subheadline, items[{title,body}]
+- nav: brand, links[{label,href}], optional cta, optional variant "default"|"minimal"|"centered"
+- hero: headline, subheadline, primaryCta{label,href}, optional brand/secondaryCta/imageUrl, layout "fullscreen"|"split"|"centered"|"minimal"
+- features: headline, items[{title,body}], optional variant "grid"|"rows"|"cards"
 - about: headline, body, optional imageUrl/stats[{label,value}]
-- gallery: headline, images[{url,alt,caption}]
+- gallery: headline, images[{url,alt,caption}], optional variant "mosaic"|"strip"
 - pricing: headline, plans[{name,price,period?,description?,features[],cta,highlighted?}]
 - testimonials: headline, items[{quote,name,role?}]
 - faq: headline, items[{question,answer}]
 - cta: headline, optional body, cta{label,href}
 - contact: headline, optional body/email/phone/address/cta
 - products: headline, items[{name,description,price?,imageUrl?,href?}]
+- booking: headline, services[{name,duration?,price?}], optional body/cta
+- checkout: headline, items[{name,price,quantity}], cta{label,href}, optional body/currencyNote
 - footer: brand, optional tagline/links/copyright
 
 Design rules:
-- Prefer 1–3 pages (home + optional about/pricing or shop).
+- Prefer 1–3 pages (home + optional about/pricing, shop, or booking).
 - Home page: nav, hero, 2–4 content sections, cta or contact, footer.
+- For hotels/salons include booking; for shops include products + checkout.
+- Always include seo.title and seo.description tailored to the brand.
 - Visually distinctive theme: avoid purple-on-white, cream+terracotta, and generic SaaS blue.
 - Use real-looking niche copy (no lorem ipsum). Unsplash image URLs when needed (https://images.unsplash.com/...).
 - Brand name should feel hero-level in the hero section.

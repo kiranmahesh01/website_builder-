@@ -18,6 +18,8 @@ const REGISTRY = {
   cta: S.Cta,
   contact: S.Contact,
   products: S.Products,
+  booking: S.Booking,
+  checkout: S.Checkout,
   footer: S.Footer,
 } as const;
 

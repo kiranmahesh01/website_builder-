@@ -5,11 +5,14 @@ import { prisma } from "@/lib/db";
 import { availableProviders, generateWebsite } from "@/lib/llm";
 import { serializeSiteData } from "@/lib/site-data";
 import { titleFromPrompt } from "@/lib/utils";
+import { snapshotProjectVersion } from "@/lib/versions";
+
+export const maxDuration = 120;
 
 const schema = z.object({
   prompt: z.string().min(3).max(4000),
   provider: z
-    .enum(["openai", "gemini", "bytez", "openrouter", "demo"])
+    .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
   projectId: z.string().optional(),
 });
@@ -38,25 +41,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    const { html, data, provider } = await generateWebsite({
+    const { html, data, provider, meta } = await generateWebsite({
       prompt: parsed.data.prompt,
       provider: parsed.data.provider,
     });
 
-    const title = titleFromPrompt(parsed.data.prompt);
+    const title = data?.brand || titleFromPrompt(parsed.data.prompt);
+    const assistantMsg = meta?.model
+      ? `Race: first valid site from ${meta.model} (score ${meta.score}) among ${meta.attempts} free models. Preview on the right.`
+      : "Generated your website from structured sections. Preview it on the right — ask me to refine anything.";
+
     const projectData = {
       title,
       prompt: parsed.data.prompt,
       html,
       data: serializeSiteData(data) ?? undefined,
       provider,
+      seoTitle: data?.seo?.title || data?.brand || title,
+      seoDescription: data?.seo?.description || undefined,
+      logoUrl: data?.logoUrl || undefined,
       messages: {
         create: [
           { role: "user", content: parsed.data.prompt },
           {
             role: "assistant",
-            content:
-              "Generated your website from structured sections. Preview it on the right — ask me to refine anything.",
+            content: assistantMsg,
           },
         ],
       },
@@ -70,6 +79,7 @@ export async function POST(req: Request) {
       if (!existing) {
         return NextResponse.json({ error: "Project not found" }, { status: 404 });
       }
+      await snapshotProjectVersion(existing.id, "Before regenerate");
       project = await prisma.project.update({
         where: { id: existing.id },
         data: projectData,
@@ -92,6 +102,10 @@ export async function POST(req: Request) {
         provider: project.provider,
         published: project.published,
         slug: project.slug,
+        seoTitle: project.seoTitle,
+        seoDescription: project.seoDescription,
+        logoUrl: project.logoUrl,
+        customDomain: project.customDomain,
       },
       providers,
     });

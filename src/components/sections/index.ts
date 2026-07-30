@@ -9,4 +9,6 @@ export { Faq } from "./Faq";
 export { Cta } from "./Cta";
 export { Contact } from "./Contact";
 export { Products } from "./Products";
+export { Booking } from "./Booking";
+export { Checkout } from "./Checkout";
 export { Footer } from "./Footer";

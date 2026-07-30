@@ -1,8 +1,8 @@
 # Magic AI
 
-Chat-to-build website builder inspired by Wegic AI. Describe a site → Magic AI outputs **structured site JSON** (pages + typed sections) → React **SiteRenderer** → preview & publish.
+Free chat-to-build website builder inspired by Wegic AI. Describe a site → Magic AI outputs **structured site JSON** (pages + typed sections) → React **SiteRenderer** → preview & publish.
 
-> **Cursor is not an AI provider.** Live generation needs its own keys (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_AI_API_KEY`, `BYTEZ_API_KEY`, etc.). Those are separate from Cursor. Anthropic is optional and not wired unless you add it yourself — do not invent keys.
+> **Magic AI itself is free.** You only pay your own LLM provider (OpenRouter/OpenAI/Gemini) if you use real models — or use **Demo** with no key. Cursor is not an AI provider for live generation.
 
 ## Architecture
 

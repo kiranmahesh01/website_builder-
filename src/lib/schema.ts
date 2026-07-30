@@ -20,11 +20,21 @@ const LinkSchema = z.object({
   href: z.string().default("#"),
 });
 
+export const SeoSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  ogImage: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+});
+
+export type Seo = z.infer<typeof SeoSchema>;
+
 const NavSection = z.object({
   type: z.literal("nav"),
   brand: z.string(),
-  links: z.array(LinkSchema).default([]),
+  links: z.array(LinkSchema).optional(),
   cta: LinkSchema.optional(),
+  variant: z.enum(["default", "minimal", "centered"]).optional(),
 });
 
 const HeroSection = z.object({
@@ -35,13 +45,15 @@ const HeroSection = z.object({
   primaryCta: LinkSchema,
   secondaryCta: LinkSchema.optional(),
   imageUrl: z.string().optional(),
-  layout: z.enum(["fullscreen", "split"]).default("fullscreen"),
+  layout: z.enum(["fullscreen", "split", "centered", "minimal"]).default("fullscreen"),
+  variant: z.enum(["default", "editorial", "bold"]).optional(),
 });
 
 const FeaturesSection = z.object({
   type: z.literal("features"),
   headline: z.string(),
   subheadline: z.string().optional(),
+  variant: z.enum(["grid", "rows", "cards"]).optional(),
   items: z
     .array(
       z.object({
@@ -68,6 +80,7 @@ const GallerySection = z.object({
   type: z.literal("gallery"),
   headline: z.string(),
   subheadline: z.string().optional(),
+  variant: z.enum(["mosaic", "strip"]).optional(),
   images: z
     .array(
       z.object({
@@ -159,11 +172,46 @@ const ProductsSection = z.object({
     .max(8),
 });
 
+const BookingSection = z.object({
+  type: z.literal("booking"),
+  headline: z.string(),
+  body: z.string().optional(),
+  services: z
+    .array(
+      z.object({
+        name: z.string(),
+        duration: z.string().optional(),
+        price: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(8),
+  cta: LinkSchema.optional(),
+});
+
+const CheckoutSection = z.object({
+  type: z.literal("checkout"),
+  headline: z.string(),
+  body: z.string().optional(),
+  currencyNote: z.string().optional(),
+  items: z
+    .array(
+      z.object({
+        name: z.string(),
+        price: z.string(),
+        quantity: z.number().int().positive().optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+  cta: LinkSchema,
+});
+
 const FooterSection = z.object({
   type: z.literal("footer"),
   brand: z.string(),
   tagline: z.string().optional(),
-  links: z.array(LinkSchema).default([]),
+  links: z.array(LinkSchema).optional(),
   copyright: z.string().optional(),
 });
 
@@ -179,6 +227,8 @@ export const SectionSchema = z.discriminatedUnion("type", [
   CtaSection,
   ContactSection,
   ProductsSection,
+  BookingSection,
+  CheckoutSection,
   FooterSection,
 ]);
 
@@ -197,6 +247,8 @@ export type Page = z.infer<typeof PageSchema>;
 export const WebsiteSchema = z.object({
   brand: z.string().min(1),
   theme: ThemeSchema,
+  seo: SeoSchema.optional(),
+  logoUrl: z.string().optional(),
   pages: z.array(PageSchema).min(1),
 });
 
@@ -214,6 +266,8 @@ export const SECTION_TYPES = [
   "cta",
   "contact",
   "products",
+  "booking",
+  "checkout",
   "footer",
 ] as const;
 

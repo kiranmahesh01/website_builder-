@@ -1,17 +1,25 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-type Params = { params: Promise<{ slug: string }> };
+type Params = { params: Promise<{ host: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
-  const { slug } = await params;
+  const { host } = await params;
+  const domain = decodeURIComponent(host)
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+
   const project = await prisma.project.findFirst({
-    where: { slug, published: true },
-    select: { html: true, title: true, id: true },
+    where: { customDomain: domain, published: true },
+    select: { html: true, title: true, id: true, slug: true },
   });
 
   if (!project?.html) {
-    return new NextResponse("Site not found", { status: 404 });
+    return new NextResponse(
+      `No published Magic AI site for domain: ${domain}`,
+      { status: 404 },
+    );
   }
 
   await prisma.project.update({
@@ -23,8 +31,8 @@ export async function GET(_req: Request, { params }: Params) {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=30",
       "X-Magic-AI-Site": project.title,
+      "X-Magic-AI-Slug": project.slug || "",
     },
   });
 }
