@@ -1,4 +1,5 @@
 import { parseWebsite, type Website } from "@/lib/schema";
+import { UI_KITS, type UiKit } from "@/lib/ui-kits";
 
 /**
  * Soft-repair common LLM JSON mistakes before Zod validation.
@@ -33,6 +34,13 @@ export function coerceWebsiteInput(input: unknown): unknown {
 
   if (typeof site.brand !== "string" || !site.brand.trim()) {
     site.brand = "Studio";
+  }
+
+  if (
+    site.uiKit == null ||
+    (typeof site.uiKit === "string" && !UI_KITS.includes(site.uiKit as UiKit))
+  ) {
+    delete site.uiKit;
   }
 
   if (!Array.isArray(site.pages)) site.pages = [];

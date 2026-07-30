@@ -1,27 +1,7 @@
 import type { ComponentType, CSSProperties } from "react";
 import type { Page, Section, Theme, Website } from "@/lib/schema";
-import * as S from "./sections";
-
-/**
- * Maps a section "type" from AI JSON to a React component.
- * Add a section: schema → prompt → registry line.
- */
-const REGISTRY = {
-  nav: S.Nav,
-  hero: S.Hero,
-  features: S.Features,
-  about: S.About,
-  gallery: S.Gallery,
-  pricing: S.Pricing,
-  testimonials: S.Testimonials,
-  faq: S.Faq,
-  cta: S.Cta,
-  contact: S.Contact,
-  products: S.Products,
-  booking: S.Booking,
-  checkout: S.Checkout,
-  footer: S.Footer,
-} as const;
+import { getSectionComponent } from "./kits/registry";
+import { normalizeUiKit } from "@/lib/ui-kits";
 
 const RADIUS = {
   none: "0px",
@@ -60,8 +40,16 @@ export function ThemeFonts({ theme }: { theme: Theme }) {
   );
 }
 
-function RenderSection({ section }: { section: Section }) {
-  const Component = REGISTRY[section.type] as ComponentType<Section> | undefined;
+function RenderSection({
+  section,
+  uiKit,
+}: {
+  section: Section;
+  uiKit: ReturnType<typeof normalizeUiKit>;
+}) {
+  const Component = getSectionComponent(uiKit, section.type) as
+    | ComponentType<Section>
+    | undefined;
   if (!Component) return null;
   return <Component {...section} />;
 }
@@ -69,14 +57,19 @@ function RenderSection({ section }: { section: Section }) {
 export function SiteRenderer({
   page,
   theme,
+  uiKit = "daisyui",
 }: {
   page: Page;
   theme: Theme;
+  uiKit?: Website["uiKit"];
 }) {
+  const kit = normalizeUiKit(uiKit);
+  const useMagicVars = kit === "magic";
+
   return (
-    <div style={themeVars(theme)}>
+    <div style={useMagicVars ? themeVars(theme) : undefined}>
       {page.sections.map((section, i) => (
-        <RenderSection key={`${section.type}-${i}`} section={section} />
+        <RenderSection key={`${section.type}-${i}`} section={section} uiKit={kit} />
       ))}
     </div>
   );
@@ -91,8 +84,11 @@ export function WebsiteRenderer({
   pageId?: string;
 }) {
   const activeId = pageId || site.pages[0]?.id;
+  const kit = normalizeUiKit(site.uiKit);
+  const useMagicVars = kit === "magic";
+
   return (
-    <div style={themeVars(site.theme)}>
+    <div style={useMagicVars ? themeVars(site.theme) : undefined}>
       {site.pages.map((page) => (
         <div
           key={page.id}
@@ -100,7 +96,11 @@ export function WebsiteRenderer({
           style={{ display: page.id === activeId ? "block" : "none" }}
         >
           {page.sections.map((section, i) => (
-            <RenderSection key={`${page.id}-${section.type}-${i}`} section={section} />
+            <RenderSection
+              key={`${page.id}-${section.type}-${i}`}
+              section={section}
+              uiKit={kit}
+            />
           ))}
         </div>
       ))}

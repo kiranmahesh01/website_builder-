@@ -10,6 +10,7 @@ import {
   parseBrief,
   scoreBriefAdherence,
 } from "@/lib/brief-parser";
+import { normalizeUiKit, pickUiKitFromBrief } from "@/lib/ui-kits";
 import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { renderWebsiteToHtml } from "@/lib/render-site";
 import { scoreWebsite } from "./score-site";
@@ -31,6 +32,19 @@ import {
 } from "./types";
 
 const ADHERENCE_RETRY_THRESHOLD = 52;
+
+function applyUiKit(
+  data: Website,
+  prompt: string,
+  preferred?: string | null,
+): Website {
+  const kit = preferred
+    ? normalizeUiKit(preferred)
+    : data.uiKit
+      ? normalizeUiKit(data.uiKit)
+      : pickUiKitFromBrief(prompt);
+  return { ...data, uiKit: kit };
+}
 
 async function generateWithProvider(
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
@@ -147,11 +161,12 @@ export async function generateWebsite(input: {
   provider?: string | null;
   model?: string | null;
   fast?: boolean;
+  uiKit?: string | null;
 }): Promise<GenerateResult> {
   const provider = resolveProvider(input.provider);
 
   if (provider === "demo") {
-    const data = generateWebsiteData(input.prompt);
+    const data = applyUiKit(generateWebsiteData(input.prompt), input.prompt, input.uiKit);
     return {
       html: await renderWebsiteToHtml(data),
       data,
@@ -177,9 +192,10 @@ export async function generateWebsite(input: {
           { fast: input.fast, retry: true },
         );
         if (retry && retry.adherence > adherence) {
+          const data = applyUiKit(retry.data, input.prompt, input.uiKit);
           return {
-            html: await renderWebsiteToHtml(retry.data),
-            data: retry.data,
+            html: await renderWebsiteToHtml(data),
+            data,
             provider: "openrouter",
             raw: retry.raw,
             mode: "schema",
@@ -195,8 +211,8 @@ export async function generateWebsite(input: {
       }
 
       return {
-        html: await renderWebsiteToHtml(best.site),
-        data: best.site,
+        html: await renderWebsiteToHtml(applyUiKit(best.site, input.prompt, input.uiKit)),
+        data: applyUiKit(best.site, input.prompt, input.uiKit),
         provider,
         raw: best.raw,
         mode: "schema",
@@ -218,8 +234,8 @@ export async function generateWebsite(input: {
         { fast: input.fast },
       );
       return {
-        html: await renderWebsiteToHtml(single.data),
-        data: single.data,
+        html: await renderWebsiteToHtml(applyUiKit(single.data, input.prompt, input.uiKit)),
+        data: applyUiKit(single.data, input.prompt, input.uiKit),
         provider: "openrouter",
         raw: single.raw,
         mode: "schema",
@@ -242,8 +258,8 @@ export async function generateWebsite(input: {
   );
 
   return {
-    html: await renderWebsiteToHtml(result.data),
-    data: result.data,
+    html: await renderWebsiteToHtml(applyUiKit(result.data, input.prompt, input.uiKit)),
+    data: applyUiKit(result.data, input.prompt, input.uiKit),
     provider,
     raw: result.raw,
     mode: "schema",

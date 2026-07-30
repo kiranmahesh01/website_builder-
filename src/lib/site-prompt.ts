@@ -18,6 +18,7 @@ JSON shape:
     "displayFont": "Google Font", "bodyFont": "Google Font",
     "radius": "none" | "small" | "medium" | "large"
   },
+  "uiKit": "daisyui" | "flowbite" | "preline" | "shadcn" | "magic",
   "pages": [{ "id": "home", "name": "Home", "path": "/", "sections": [...] }]
 }
 
@@ -38,7 +39,13 @@ NON-NEGOTIABLE RULES:
 7) Include sections the brief implies (menu→products/features, shop→products+checkout, salon→booking, SaaS→pricing+testimonials).
 8) seo.title and seo.description must mention the real business/offer.
 9) Unsplash images: https://images.unsplash.com/...?w=1600&q=80 — pick images that match the niche.
-10) Return ONLY valid JSON.`;
+10) uiKit — pick the best free UI library for the brief:
+   - "daisyui" — shops, colorful brands, playful sites (default)
+   - "flowbite" — blogs, content, docs-style marketing
+   - "preline" — SaaS landing pages, agencies, startups
+   - "shadcn" — minimal SaaS, portfolios, clean professional apps
+   - "magic" — only if user asks for custom inline styles
+11) Return ONLY valid JSON.`;
 
 export const SITE_REFINE_SYSTEM_PROMPT = `You are Magic AI refining a website. The user message is a CHANGE REQUEST — apply it exactly.
 

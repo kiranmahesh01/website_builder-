@@ -1,3 +1,5 @@
+import { DEFAULT_UI_KIT } from "@/lib/ui-kits";
+
 export type ParsedBrief = {
   raw: string;
   brandHint: string | null;
@@ -162,6 +164,9 @@ export function buildBriefUserMessage(
   if (brief.styleHints.length) {
     lines.push(`- Visual direction: ${brief.styleHints.join("; ")}`);
   }
+  lines.push(
+    `- UI kit: pick one of daisyui (shops/colorful), preline (SaaS/agency), shadcn (minimal/pro), flowbite (content/blog). Default: ${DEFAULT_UI_KIT}.`,
+  );
 
   if (options?.fast) {
     lines.push(

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UI_KITS } from "@/lib/ui-kits";
 
 /** Shared theme tokens the renderer maps to CSS variables. */
 export const ThemeSchema = z.object({
@@ -249,6 +250,8 @@ export const WebsiteSchema = z.object({
   theme: ThemeSchema,
   seo: SeoSchema.optional(),
   logoUrl: z.string().optional(),
+  /** UI component library for published HTML: daisyui | flowbite | preline | shadcn | magic */
+  uiKit: z.enum(UI_KITS).optional(),
   pages: z.array(PageSchema).min(1),
 });
 

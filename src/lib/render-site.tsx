@@ -1,6 +1,8 @@
 import type { ReactElement } from "react";
 import { ThemeFonts, WebsiteRenderer } from "@/components/SiteRenderer";
 import type { Website } from "@/lib/schema";
+import { normalizeUiKit } from "@/lib/ui-kits";
+import { uiKitHeadAssets } from "@/lib/ui-kits/head";
 
 function escapeHtml(s: string): string {
   return s
@@ -26,6 +28,8 @@ export async function renderWebsiteToHtml(site: Website): Promise<string> {
 
   const body = renderToStaticMarkup(tree);
   const title = site.seo?.title || site.brand;
+  const kit = normalizeUiKit(site.uiKit);
+  const kitAssets = uiKitHeadAssets(kit, site.theme);
   const description =
     site.seo?.description ||
     `Website for ${site.brand} — built with Magic AI.`;
@@ -67,6 +71,7 @@ export async function renderWebsiteToHtml(site: Website): Promise<string> {
   ${og ? `<meta property="og:image" content="${escapeHtml(og)}" />` : ""}
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  ${kitAssets}
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }

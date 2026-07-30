@@ -4,6 +4,12 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VisualEditor } from "@/components/VisualEditor";
+import {
+  DEFAULT_UI_KIT,
+  UI_KIT_LABELS,
+  UI_KITS,
+  type UiKit,
+} from "@/lib/ui-kits";
 
 type Provider =
   | "openai"
@@ -87,6 +93,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [fastMode, setFastMode] = useState(true);
+  const [uiKit, setUiKit] = useState<UiKit>(DEFAULT_UI_KIT);
   const [showEditor, setShowEditor] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
@@ -200,6 +207,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           provider,
           projectId: project?.id,
           fast: fastMode,
+          uiKit,
         }),
         signal: controller.signal,
       });
@@ -387,6 +395,19 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
               No providers — restart the server
             </span>
           )}
+          <select
+            value={uiKit}
+            onChange={(e) => setUiKit(e.target.value as UiKit)}
+            className="max-w-[11rem] rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
+            disabled={busy}
+            title="UI component library for generated sites"
+          >
+            {UI_KITS.filter((k) => k !== "magic").map((k) => (
+              <option key={k} value={k}>
+                {UI_KIT_LABELS[k]}
+              </option>
+            ))}
+          </select>
           <div className="hidden rounded-full border border-[var(--line)] p-0.5 sm:flex">
             <button
               type="button"
