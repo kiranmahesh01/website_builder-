@@ -17,8 +17,8 @@ export function availableProviders(): LlmProvider[] {
   if (process.env.GOOGLE_AI_API_KEY) providers.push("gemini");
   if (process.env.BYTEZ_API_KEY) providers.push("bytez");
   if (process.env.OPENROUTER_API_KEY) {
-    providers.push("openrouter-best");
     providers.push("openrouter");
+    providers.push("openrouter-best");
   }
   // Always available as a no-key fallback so Generate works out of the box.
   providers.push("demo");
@@ -62,7 +62,8 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
       throw new Error(missingProviderMessage(preferred));
     }
   }
-  const fallback = process.env.DEFAULT_LLM_PROVIDER as LlmProvider | undefined;
+  const fallback = (process.env.DEFAULT_LLM_PROVIDER ||
+    (process.env.OPENROUTER_API_KEY ? "openrouter" : "demo")) as LlmProvider;
   if (fallback && available.includes(fallback)) return fallback;
   if (available[0]) return available[0];
   throw new Error(

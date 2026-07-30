@@ -4,7 +4,8 @@ import { generateWithGemini } from "./gemini";
 import { generateWithOpenAI } from "./openai";
 import { generateWithOpenRouter } from "./openrouter";
 import { generateOpenRouterBestOf } from "./openrouter-best";
-import { parseWebsite, type Website } from "@/lib/schema";
+import type { Website } from "@/lib/schema";
+import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { renderWebsiteToHtml } from "@/lib/render-site";
 import {
   SITE_JSON_SYSTEM_PROMPT,
@@ -80,53 +81,96 @@ export async function generateWebsite(input: {
   ];
 
   if (provider === "openrouter-best") {
-    const best = await generateOpenRouterBestOf(messages);
-    return {
-      html: await renderWebsiteToHtml(best.site),
-      data: best.site,
-      provider,
-      raw: best.raw,
-      mode: "schema",
-      meta: {
-        model: best.model,
-        score: best.score,
-        attempts: best.attempts,
-        validCount: best.validCount,
-        modelsTried: best.modelsTried,
-      },
-    };
+    try {
+      const best = await generateOpenRouterBestOf(messages);
+      return {
+        html: await renderWebsiteToHtml(best.site),
+        data: best.site,
+        provider,
+        raw: best.raw,
+        mode: "schema",
+        meta: {
+          model: best.model,
+          score: best.score,
+          attempts: best.attempts,
+          validCount: best.validCount,
+          modelsTried: best.modelsTried,
+        },
+      };
+    } catch (raceError) {
+      // Final safety net: local demo templates so the builder never hard-fails.
+      console.error("openrouter-best failed, using demo fallback", raceError);
+      const data = generateWebsiteData(input.prompt);
+      return {
+        html: await renderWebsiteToHtml(data),
+        data,
+        provider: "demo",
+        raw: JSON.stringify(data),
+        mode: "schema",
+        meta: {
+          model: "demo-fallback",
+          score: 0,
+          attempts: 0,
+          validCount: 1,
+          modelsTried: ["demo"],
+        },
+      };
+    }
   }
 
-  const raw = await generateWithProvider(provider, messages, input.model);
-  const json = extractJsonObject(raw);
-  const data = json ? parseWebsite(json) : null;
+  try {
+    const raw = await generateWithProvider(provider, messages, input.model);
+    const json = extractJsonObject(raw);
+    const data = json ? parseWebsiteLenient(json) : null;
 
-  if (data) {
+    if (data) {
+      return {
+        html: await renderWebsiteToHtml(data),
+        data,
+        provider,
+        raw,
+        mode: "schema",
+      };
+    }
+
+    // Fallback: ask again as raw HTML if the model ignored JSON instructions
+    const htmlMessages: ChatMessage[] = [
+      { role: "system", content: WEBSITE_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Build a complete website for this brief:\n\n${input.prompt}`,
+      },
+    ];
+    const htmlRaw = await generateWithProvider(
+      provider,
+      htmlMessages,
+      input.model,
+    );
+    return {
+      html: extractHtml(htmlRaw),
+      data: null,
+      provider,
+      raw: htmlRaw,
+      mode: "html",
+    };
+  } catch (error) {
+    console.error("generate provider failed, using demo fallback", error);
+    const data = generateWebsiteData(input.prompt);
     return {
       html: await renderWebsiteToHtml(data),
       data,
-      provider,
-      raw,
+      provider: "demo",
+      raw: JSON.stringify(data),
       mode: "schema",
+      meta: {
+        model: "demo-fallback",
+        score: 0,
+        attempts: 0,
+        validCount: 1,
+        modelsTried: ["demo"],
+      },
     };
   }
-
-  // Fallback: ask again as raw HTML if the model ignored JSON instructions
-  const htmlMessages: ChatMessage[] = [
-    { role: "system", content: WEBSITE_SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: `Build a complete website for this brief:\n\n${input.prompt}`,
-    },
-  ];
-  const htmlRaw = await generateWithProvider(provider, htmlMessages, input.model);
-  return {
-    html: extractHtml(htmlRaw),
-    data: null,
-    provider,
-    raw: htmlRaw,
-    mode: "html",
-  };
 }
 
 /** @deprecated Use generateWebsite */
@@ -220,7 +264,7 @@ export async function refineWebsite(input: {
       input.model,
     );
     const json = extractJsonObject(raw);
-    const data = json ? parseWebsite(json) : null;
+    const data = json ? parseWebsiteLenient(json) : null;
     if (data) {
       return {
         html: await renderWebsiteToHtml(data),

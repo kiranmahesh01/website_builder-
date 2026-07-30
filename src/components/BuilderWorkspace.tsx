@@ -37,10 +37,10 @@ function providerLabel(
   }
   if (p === "openrouter") {
     const m = shortModelName(models?.openrouter);
-    return m ? `OpenRouter · ${m}` : "OpenRouter";
+    return m ? `OpenRouter · ${m} (recommended)` : "OpenRouter (recommended)";
   }
   if (p === "openrouter-best") {
-    return "OpenRouter · Race (free ×3)";
+    return "OpenRouter · Race (free, then fallback)";
   }
   if (p === "demo") return "Demo (no API key)";
   return p;
@@ -142,19 +142,18 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   }, [projectId, router]);
 
   useEffect(() => {
-    if (!projectId && initialPrompt && !autoStarted.current && providers.length >= 0) {
-      // wait a tick for providers fetch; start when prompt present and not already generating
-      if (autoStarted.current) return;
-      const t = setTimeout(() => {
-        if (!autoStarted.current && initialPrompt.trim()) {
-          autoStarted.current = true;
-          void generate(initialPrompt);
-        }
-      }, 400);
-      return () => clearTimeout(t);
-    }
+    // Wait until providers are loaded so we don't fire with stale "demo" default.
+    if (projectId || !initialPrompt.trim() || autoStarted.current) return;
+    if (!providers.length) return;
+    const t = setTimeout(() => {
+      if (!autoStarted.current && initialPrompt.trim()) {
+        autoStarted.current = true;
+        void generate(initialPrompt);
+      }
+    }, 250);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt, projectId, providers]);
+  }, [initialPrompt, projectId, providers, provider]);
 
   async function ensureAuth(callback: string): Promise<boolean> {
     const sessionProbe = await fetch("/api/projects");
@@ -178,8 +177,10 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     setError("");
     setStatus(
       provider === "openrouter-best"
-        ? "Racing 3 free models — first valid site wins…"
-        : "Magic AI is designing your site…",
+        ? "Racing free models, then falling back to GPT-4o mini if needed…"
+        : provider === "openrouter"
+          ? "Designing with OpenRouter…"
+          : "Magic AI is designing your site…",
     );
     setMessages((prev) => [
       ...prev,
@@ -188,6 +189,8 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     ]);
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 110_000);
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,28 +199,59 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           provider,
           projectId: project?.id,
         }),
+        signal: controller.signal,
       });
-      const data = await res.json();
+      clearTimeout(timeout);
+
+      let data: {
+        error?: string;
+        project?: ProjectState;
+        providers?: Provider[];
+      } = {};
+      try {
+        data = await res.json();
+      } catch {
+        setError(
+          res.ok
+            ? "Generation returned an invalid response."
+            : `Generation failed (HTTP ${res.status}). Try OpenRouter or Demo.`,
+        );
+        setMessages((prev) => prev.slice(0, -1));
+        return;
+      }
       if (!res.ok) {
         setError(data.error || "Generation failed");
         setMessages((prev) => prev.slice(0, -1));
         return;
       }
+      if (!data.project) {
+        setError("Generation succeeded but no project was returned.");
+        setMessages((prev) => prev.slice(0, -1));
+        return;
+      }
       setProject(data.project);
       setProviders(data.providers || providers);
+      const usedDemo = data.project.provider === "demo" && provider !== "demo";
       setMessages([
         { role: "user", content: value },
         {
           role: "assistant",
-          content:
-            "Generated your website. Preview it on the right — ask me to refine anything.",
+          content: usedDemo
+            ? "AI models were unavailable, so I built a polished demo template from your brief. Preview on the right — refine in chat, or retry with OpenRouter."
+            : "Generated your website. Preview it on the right — ask me to refine layout, copy, colors, or sections.",
         },
       ]);
       if (!projectId) {
         router.replace(`/builder/${data.project.id}`);
       }
-    } catch {
-      setError("Generation failed. Check your API keys and try again.");
+    } catch (err) {
+      const aborted =
+        err instanceof DOMException && err.name === "AbortError";
+      setError(
+        aborted
+          ? "Generation timed out. Try OpenRouter (single model) or a shorter brief."
+          : "Network error during generation. Check your connection and try again.",
+      );
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setBusy(false);

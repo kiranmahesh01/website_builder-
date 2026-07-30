@@ -1,4 +1,5 @@
-import { parseWebsite, type Website } from "@/lib/schema";
+import { type Website } from "@/lib/schema";
+import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { generateWithOpenRouter } from "./openrouter";
 import { scoreWebsite } from "./score-site";
 import { extractJsonObject, type ChatMessage } from "./types";
@@ -29,13 +30,28 @@ export type BestOfResult = {
   attempts: number;
   validCount: number;
   modelsTried: string[];
-  mode: "race";
+  mode: "race" | "fallback";
 };
 
+async function tryModel(
+  messages: ChatMessage[],
+  model: string,
+): Promise<{ site: Website; raw: string; model: string }> {
+  const raw = await generateWithOpenRouter(messages, {
+    model,
+    json: !model.includes(":free"),
+  });
+  const json = extractJsonObject(raw);
+  const site = json ? parseWebsiteLenient(json) : null;
+  if (!site) {
+    throw new Error(`Invalid schema from ${model}`);
+  }
+  return { site, raw, model };
+}
+
 /**
- * Race several free OpenRouter models in parallel.
- * First response that passes Zod schema wins (faster).
- * Other in-flight calls are ignored for the result.
+ * Race free OpenRouter models; first valid Zod JSON wins.
+ * If all free models fail, fall back to OPENROUTER_MODEL (gpt-4o-mini).
  */
 export async function generateOpenRouterBestOf(
   messages: ChatMessage[],
@@ -46,21 +62,17 @@ export async function generateOpenRouterBestOf(
   }
 
   const errors: string[] = [];
-
   const racers = models.map(async (model) => {
-    const raw = await generateWithOpenRouter(messages, { model });
-    const json = extractJsonObject(raw);
-    const site = json ? parseWebsite(json) : null;
-    if (!site) {
-      const err = `Invalid schema from ${model}`;
+    try {
+      return await tryModel(messages, model);
+    } catch (e) {
+      const err = e instanceof Error ? e.message : String(e);
       errors.push(err);
-      throw new Error(err);
+      throw e instanceof Error ? e : new Error(err);
     }
-    return { site, raw, model };
   });
 
   try {
-    // Promise.any → first fulfilled (valid JSON) wins
     const winner = await Promise.any(racers);
     return {
       site: winner.site,
@@ -72,16 +84,30 @@ export async function generateOpenRouterBestOf(
       modelsTried: models,
       mode: "race",
     };
-  } catch (err) {
-    const detail =
-      err instanceof AggregateError
-        ? err.errors
-            .map((e) => (e instanceof Error ? e.message : String(e)))
-            .slice(0, 3)
-            .join(" | ")
-        : errors[0] || (err instanceof Error ? err.message : String(err));
-    throw new Error(
-      `Race found no valid site JSON from ${models.length} free models. ${detail}`,
-    );
+  } catch {
+    const fallbackModel =
+      process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+    try {
+      const winner = await tryModel(messages, fallbackModel);
+      return {
+        site: winner.site,
+        raw: winner.raw,
+        model: winner.model,
+        score: scoreWebsite(winner.site),
+        attempts: models.length + 1,
+        validCount: 1,
+        modelsTried: [...models, fallbackModel],
+        mode: "fallback",
+      };
+    } catch (fallbackErr) {
+      const detail = errors.slice(0, 2).join(" | ");
+      const fb =
+        fallbackErr instanceof Error
+          ? fallbackErr.message
+          : String(fallbackErr);
+      throw new Error(
+        `Could not generate valid site JSON. Free race failed (${detail || "no valid JSON"}). Fallback ${fallbackModel}: ${fb}`,
+      );
+    }
   }
 }
