@@ -356,14 +356,15 @@ export function ContactForm({ content, theme, siteSlug }: SectionProps) {
           <form
             id="magic-contact-form"
             data-site-slug={siteSlug || ""}
+            action={siteSlug ? undefined : "#contact"}
+            method={siteSlug ? "post" : "get"}
             style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem" }}
-            onSubmit={siteSlug ? undefined : (e) => e.preventDefault()}
           >
             <input name="name" placeholder="Name" required style={inputStyle} />
             <input name="email" placeholder="Email" type="email" required style={inputStyle} />
             <textarea name="message" placeholder="Message" rows={4} required style={inputStyle} />
             <input type="text" name="_hp" style={{ display: "none" }} tabIndex={-1} autoComplete="off" />
-            <SpecButton theme={theme} type="submit">
+            <SpecButton theme={theme} type={siteSlug ? "submit" : "button"}>
               {str(content.submitLabel, "Send")}
             </SpecButton>
             <p id="magic-contact-status" style={{ fontSize: "0.85rem", color: "var(--muted)", minHeight: "1.25rem" }} />
