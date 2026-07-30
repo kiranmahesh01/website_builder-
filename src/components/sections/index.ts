@@ -1,0 +1,12 @@
+export { Nav } from "./Nav";
+export { Hero } from "./Hero";
+export { Features } from "./Features";
+export { About } from "./About";
+export { Gallery } from "./Gallery";
+export { Pricing } from "./Pricing";
+export { Testimonials } from "./Testimonials";
+export { Faq } from "./Faq";
+export { Cta } from "./Cta";
+export { Contact } from "./Contact";
+export { Products } from "./Products";
+export { Footer } from "./Footer";

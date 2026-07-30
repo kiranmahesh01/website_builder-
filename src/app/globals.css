@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #07080a;
+  --ink-soft: #12141a;
+  --fog: #e8ebe3;
+  --mist: #a8b0a0;
+  --lime: #c8f542;
+  --lime-deep: #a8d12a;
+  --coral: #ff6b4a;
+  --glass: rgba(255, 255, 255, 0.06);
+  --line: rgba(232, 235, 227, 0.12);
+  --background: var(--ink);
+  --foreground: var(--fog);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-fog: var(--fog);
+  --color-mist: var(--mist);
+  --color-lime: var(--lime);
+  --color-lime-deep: var(--lime-deep);
+  --color-coral: var(--coral);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-brand: var(--font-brand);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 245, 66, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 28px 4px rgba(200, 245, 66, 0.2);
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(12px, -18px) scale(1.05);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.7s ease-out both;
+}
+
+.animate-rise-delay {
+  animation: rise 0.7s ease-out 0.15s both;
+}
+
+.animate-rise-delay-2 {
+  animation: rise 0.7s ease-out 0.3s both;
+}
+
+.animate-glow {
+  animation: pulse-glow 2.8s ease-in-out infinite;
+}
+
+.bg-atmosphere {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(200, 245, 66, 0.14), transparent 55%),
+    radial-gradient(ellipse 40% 40% at 90% 20%, rgba(255, 107, 74, 0.08), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 10% 60%, rgba(200, 245, 66, 0.05), transparent 50%),
+    var(--ink);
+}
+
+.prompt-shell {
+  background: #fff;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.4rem 0.4rem 1.25rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.prompt-shell input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #111;
+  font-size: 1rem;
+  min-width: 0;
+}
+
+.prompt-shell input::placeholder {
+  color: #9aa396;
+}
+
+@media (max-width: 640px) {
+  .prompt-shell {
+    border-radius: 1.25rem;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.75rem;
+  }
+}
