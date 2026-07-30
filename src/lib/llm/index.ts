@@ -20,6 +20,7 @@ import {
 } from "@/lib/themes";
 import { parseWebsiteLenient } from "@/lib/site-coerce";
 import { renderWebsiteToHtml } from "@/lib/render-site";
+import { runSpecPipeline } from "@/lib/spec/pipeline";
 import { scoreWebsite } from "./score-site";
 import {
   fastModePromptAppendix,
@@ -166,19 +167,23 @@ export type GenerateResult = {
     validCount?: number;
     modelsTried?: string[];
     retried?: boolean;
+    pipeline?: string;
+    sections?: number;
+    pages?: number;
   };
 };
 
-export async function generateWebsite(input: {
-  prompt: string;
-  provider?: string | null;
-  model?: string | null;
-  fast?: boolean;
-  uiKit?: string | null;
-  theme?: string | null;
-}): Promise<GenerateResult> {
-  const provider = resolveProvider(input.provider);
-
+async function generateWebsiteLegacy(
+  input: {
+    prompt: string;
+    provider?: string | null;
+    model?: string | null;
+    fast?: boolean;
+    uiKit?: string | null;
+    theme?: string | null;
+  },
+  provider: LlmProvider,
+): Promise<GenerateResult> {
   if (provider === "demo") {
     const data = applyThemeAndKit(generateWebsiteData(input.prompt), input.prompt, {
       uiKit: input.uiKit,
@@ -190,6 +195,7 @@ export async function generateWebsite(input: {
       provider,
       raw: JSON.stringify(data),
       mode: "schema",
+      meta: { pipeline: "legacy" },
     };
   }
 
@@ -225,6 +231,7 @@ export async function generateWebsite(input: {
               adherence: retry.adherence,
               attempts: best.attempts + 1,
               retried: true,
+              pipeline: "legacy",
             },
           };
         }
@@ -251,6 +258,7 @@ export async function generateWebsite(input: {
           attempts: best.attempts,
           validCount: best.validCount,
           modelsTried: best.modelsTried,
+          pipeline: "legacy",
         },
       };
     } catch (raceError) {
@@ -281,6 +289,7 @@ export async function generateWebsite(input: {
           adherence: single.adherence,
           attempts: 2,
           retried: single.retried,
+          pipeline: "legacy",
         },
       };
     }
@@ -312,8 +321,50 @@ export async function generateWebsite(input: {
       adherence: result.adherence,
       retried: result.retried,
       attempts: result.retried ? 2 : 1,
+      pipeline: "legacy",
     },
   };
+}
+
+export async function generateWebsite(input: {
+  prompt: string;
+  provider?: string | null;
+  model?: string | null;
+  fast?: boolean;
+  uiKit?: string | null;
+  theme?: string | null;
+}): Promise<GenerateResult> {
+  const provider = resolveProvider(input.provider);
+
+  try {
+    const result = await runSpecPipeline({
+      prompt: input.prompt,
+      provider,
+      theme: input.theme,
+      uiKit: input.uiKit,
+    });
+    const adherence = scoreBriefAdherence(
+      result.website,
+      parseBrief(input.prompt),
+    );
+    return {
+      html: await renderWebsiteToHtml(result.website),
+      data: result.website,
+      provider,
+      raw: JSON.stringify(result.spec),
+      mode: "schema",
+      meta: {
+        score: scoreWebsite(result.website),
+        adherence,
+        pipeline: "spec",
+        sections: result.meta.sections,
+        pages: result.meta.pages,
+      },
+    };
+  } catch (specError) {
+    console.error("Spec pipeline failed, using legacy generator", specError);
+    return generateWebsiteLegacy(input, provider);
+  }
 }
 
 /** @deprecated Use generateWebsite */

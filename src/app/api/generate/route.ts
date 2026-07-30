@@ -16,7 +16,6 @@ const schema = z.object({
     .optional(),
   projectId: z.string().optional(),
   fast: z.boolean().optional(),
-  uiKit: z.enum(["daisyui", "flowbite", "preline", "shadcn", "magic"]).optional(),
   theme: z
     .enum(["bold_startup", "warm_editorial", "minimal_studio"])
     .optional(),
@@ -50,7 +49,6 @@ export async function POST(req: Request) {
       prompt: parsed.data.prompt,
       provider: parsed.data.provider,
       fast: parsed.data.fast,
-      uiKit: parsed.data.uiKit,
       theme: parsed.data.theme,
     });
 

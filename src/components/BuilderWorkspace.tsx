@@ -187,7 +187,6 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           prompt: value,
           provider,
           projectId: project?.id,
-          fast: true,
           theme: siteTheme,
         }),
         signal: controller.signal,
