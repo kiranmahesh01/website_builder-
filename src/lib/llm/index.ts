@@ -55,7 +55,7 @@ export async function generateWebsite(input: {
   if (provider === "demo") {
     const data = generateWebsiteData(input.prompt);
     return {
-      html: renderWebsiteToHtml(data),
+      html: await renderWebsiteToHtml(data),
       data,
       provider,
       raw: JSON.stringify(data),
@@ -77,7 +77,7 @@ export async function generateWebsite(input: {
 
   if (data) {
     return {
-      html: renderWebsiteToHtml(data),
+      html: await renderWebsiteToHtml(data),
       data,
       provider,
       raw,
@@ -138,7 +138,7 @@ export async function refineWebsite(input: {
       originalPrompt: input.originalPrompt || undefined,
     });
     return {
-      html: renderWebsiteToHtml(data),
+      html: await renderWebsiteToHtml(data),
       data,
       provider,
       reply: `Updated the structured site in demo mode based on: "${input.instruction}"`,
@@ -167,7 +167,7 @@ export async function refineWebsite(input: {
     const data = json ? parseWebsite(json) : null;
     if (data) {
       return {
-        html: renderWebsiteToHtml(data),
+        html: await renderWebsiteToHtml(data),
         data,
         provider,
         reply: `Updated the structured site based on: "${input.instruction}"`,

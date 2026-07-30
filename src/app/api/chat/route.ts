@@ -3,7 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { refineWebsite } from "@/lib/llm";
-import { parseWebsite, type Website } from "@/lib/schema";
+import { deserializeSiteData, serializeSiteData } from "@/lib/site-data";
 
 const schema = z.object({
   projectId: z.string().min(1),
@@ -12,11 +12,6 @@ const schema = z.object({
     .enum(["openai", "gemini", "bytez", "openrouter", "demo"])
     .optional(),
 });
-
-function asWebsite(raw: unknown): Website | null {
-  if (!raw) return null;
-  return parseWebsite(raw);
-}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -51,7 +46,7 @@ export async function POST(req: Request) {
 
     const { html, data, provider, reply } = await refineWebsite({
       currentHtml: project.html,
-      currentData: asWebsite(project.data),
+      currentData: deserializeSiteData(project.data),
       instruction: parsed.data.message,
       history: project.messages.map((m) => ({
         role: m.role,
@@ -65,7 +60,7 @@ export async function POST(req: Request) {
       where: { id: project.id },
       data: {
         html,
-        data: data ?? undefined,
+        data: serializeSiteData(data) ?? undefined,
         provider,
         messages: {
           create: [

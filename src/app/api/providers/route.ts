@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { availableProviders } from "@/lib/llm";
+import { availableProviders } from "@/lib/llm/types";
 
 export async function GET() {
   return NextResponse.json({

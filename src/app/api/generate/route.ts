@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { availableProviders, generateWebsite } from "@/lib/llm";
+import { serializeSiteData } from "@/lib/site-data";
 import { titleFromPrompt } from "@/lib/utils";
 
 const schema = z.object({
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
       title,
       prompt: parsed.data.prompt,
       html,
-      data: data ?? undefined,
+      data: serializeSiteData(data) ?? undefined,
       provider,
       messages: {
         create: [
