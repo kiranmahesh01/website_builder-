@@ -9,6 +9,14 @@ import { generateDesignSystem } from "@/lib/design-system";
 import { matchWebsiteDna } from "@/lib/dna";
 import { expandPromptToExpertBrief } from "@/lib/prompt";
 import { buildWebsitePlan } from "@/lib/create/plan";
+import type { WebsiteBlueprint } from "@/lib/agents/designer";
+import {
+  DEFAULT_SECTIONS,
+  SectionIdSchema,
+  type SectionId,
+} from "@/lib/spec/schema";
+import { normalizeStructure, validateStructure } from "@/lib/spec/validate";
+import { pickThemeFromBrief } from "@/lib/themes";
 import { runAgentDebate } from "./debate";
 import type { MagicBlueprint } from "./types";
 
@@ -194,4 +202,51 @@ export function buildMagicBlueprint(input: {
   };
 
   return { ...blueprint, planPreview };
+}
+
+/**
+ * Convert a Magic Blueprint into the agent WebsiteBlueprint so generate can
+ * skip designer LLM calls and still inject DNA sections + copy patterns.
+ */
+export function magicBlueprintToWebsiteBlueprint(
+  magic: MagicBlueprint,
+): WebsiteBlueprint {
+  const sectionIds = magic.websiteStructure
+    .map((s) => SectionIdSchema.safeParse(s.id))
+    .filter((r): r is { success: true; data: SectionId } => r.success)
+    .map((r) => r.data);
+
+  const normalized = normalizeStructure(
+    sectionIds.length >= 5 ? sectionIds : DEFAULT_SECTIONS,
+  );
+  const sections =
+    validateStructure(normalized) === null ? normalized : DEFAULT_SECTIONS;
+
+  const theme = pickThemeFromBrief(
+    `${magic.businessAnalysis.industry} ${magic.designPlan.style} ${magic.summary}`,
+  );
+
+  return {
+    industry: magic.dna.industry || magic.businessAnalysis.industry,
+    style: magic.designPlan.style || "minimal",
+    theme,
+    design: { ...magic.designPlan.tokens },
+    sections,
+    toneRules: magic.customerStrategy.messagingPillars.slice(0, 8),
+    dontRules: magic.businessAnalysis.risks.slice(0, 6).map((r) =>
+      r.replace(/^Visitors fear:\s*/i, "Avoid amplifying: "),
+    ),
+    headlinePatterns: [
+      ...magic.customerStrategy.recommendedOffers.slice(0, 3),
+      ...magic.conversionImprovements.slice(0, 3).map((c) => c.title),
+    ].slice(0, 6),
+    layoutRules: [
+      magic.debate.managerDecision.mobileNav,
+      `CTA strength: ${magic.debate.managerDecision.ctaStrength}`,
+      ...magic.strategyRecommendations.slice(0, 3),
+    ].slice(0, 6),
+    confidence: magic.dna.confidence === "low" ? "medium" : magic.dna.confidence,
+    source: "deterministic",
+    templateIds: magic.templateHints.slice(0, 2),
+  };
 }

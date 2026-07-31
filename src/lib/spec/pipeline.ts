@@ -46,7 +46,8 @@ export type PipelineBlueprint = {
   digest?: string;
 };
 
-const MAX_RETRIES = 2;
+/** One retry is enough when the primary model is healthy; avoids burning rate limits. */
+const MAX_RETRIES = 1;
 
 async function callJson(
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">,

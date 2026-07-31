@@ -49,6 +49,11 @@ export type AgentRunInput = {
   uiKit?: string | null;
   /** User-selected template from the create wizard (generate only). */
   templateId?: string | null;
+  /**
+   * Prebuilt deterministic blueprint (Magic Blueprint / DNA). When set on
+   * generate, designer LLM is skipped and content prompts get DNA copy patterns.
+   */
+  seedBlueprint?: WebsiteBlueprint | null;
   maxFixAttempts?: number;
   /** Spend a model call on subjective copy review once the hard checks pass. */
   judge?: boolean;
@@ -112,7 +117,14 @@ export async function runAgentLoop(
   emit("orchestrator", "start", `Starting ${input.mode} run`);
 
   let plan: AgentPlan | null = null;
-  let blueprint: WebsiteBlueprint | null = null;
+  let blueprint: WebsiteBlueprint | null = input.seedBlueprint ?? null;
+  if (blueprint) {
+    emit(
+      "designer",
+      "progress",
+      `Seeded Magic Blueprint · ${blueprint.industry} · ${blueprint.sections.length} sections`,
+    );
+  }
   let spec: SiteSpec | null =
     input.mode === "refine" && input.spec
       ? withSectionKeys(input.spec)
@@ -172,7 +184,23 @@ export async function runAgentLoop(
 
     if (decision.step === "plan") {
       emit("planner", "start", "Reading the brief");
-      if (state.mode === "generate") {
+      if (state.mode === "generate" && input.seedBlueprint) {
+        // DNA / Magic Blueprint already chose structure — skip planner LLM.
+        plan = {
+          intent: "regenerate",
+          summary: `Build from Magic Blueprint (${input.seedBlueprint.industry})`,
+          targets: [],
+          steps: [
+            "Apply DNA section order and design tokens",
+            "Generate section copy from blueprint patterns",
+            "Review and light repair",
+          ],
+          confidence: input.seedBlueprint.confidence,
+          source: "deterministic",
+          industry: input.seedBlueprint.industry,
+          templateIds: input.seedBlueprint.templateIds,
+        };
+      } else if (state.mode === "generate") {
         plan = await runGeneratePlanner({
           request: input.request,
           retrieved: retrieved ?? undefined,
@@ -199,6 +227,14 @@ export async function runAgentLoop(
     }
 
     if (decision.step === "design") {
+      if (blueprint) {
+        emit(
+          "designer",
+          "done",
+          `Using Magic Blueprint · ${blueprint.industry} · ${blueprint.sections.length} sections`,
+        );
+        continue;
+      }
       emit("designer", "start", "Building the website blueprint");
       if (!retrieved) {
         retrieved = retrieveTemplates(input.request, 2, {

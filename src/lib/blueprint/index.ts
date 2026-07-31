@@ -5,5 +5,8 @@ export type {
   CustomerStrategy,
   ConversionImprovement,
 } from "./types";
-export { buildMagicBlueprint } from "./build";
+export {
+  buildMagicBlueprint,
+  magicBlueprintToWebsiteBlueprint,
+} from "./build";
 export { runAgentDebate, type DebateSummary, type DebateOpinion } from "./debate";

@@ -62,14 +62,21 @@ async function callOpenRouter(
   maxTokens: number,
   model?: string | null,
 ): Promise<string> {
+  // Prefer a concrete free model over openrouter/free when falling back from
+  // NVIDIA — the auto pool often returns empty bodies under load.
+  const preferred =
+    model && isOpenRouterStyleModel(model) ? model : null;
   const openRouterModel =
-    model && isOpenRouterStyleModel(model)
-      ? model
-      : process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
+    preferred && preferred !== "openrouter/free"
+      ? preferred
+      : process.env.OPENROUTER_FALLBACK_MODELS?.split(",")
+          .map((s) => s.trim())
+          .find((m) => m && m !== "openrouter/free") ||
+        "google/gemma-4-31b-it:free";
   return generateWithOpenRouter(messages, {
     maxTokens,
     json: true,
-    model: openRouterModel,
+    model: openRouterModel || DEFAULT_OPENROUTER_MODEL,
   });
 }
 

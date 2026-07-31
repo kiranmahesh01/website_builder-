@@ -5,7 +5,7 @@ import { buildWebsitePlan } from "@/lib/create";
 export const runtime = "nodejs";
 
 const schema = z.object({
-  prompt: z.string().min(3).max(4000),
+  prompt: z.string().min(3).max(12_000),
   websiteType: z
     .enum(["business", "portfolio", "store", "blog", "landing"])
     .optional(),

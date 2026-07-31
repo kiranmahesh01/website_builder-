@@ -495,6 +495,13 @@ export function BuilderWorkspace({
     const value = chatInput.trim();
     if (!value || busy) return;
 
+    if (value.length > 12_000) {
+      setError(
+        "Message is too long (max 12,000 characters). Split it into a shorter request.",
+      );
+      return;
+    }
+
     if (!project?.html) {
       await generate(value);
       setChatInput("");

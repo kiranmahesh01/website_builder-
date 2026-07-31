@@ -21,13 +21,16 @@ export const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
  * Re-measure with `npx tsx scripts/probe-nvidia.ts` and override via
  * NVIDIA_MODEL / NVIDIA_FALLBACK_MODELS; the catalog changes often.
  */
+/**
+ * Auto-fallback chain stays on models that finish in ~5–30s. Slower frontier
+ * models (GLM / DeepSeek Pro ~60–80s) are omitted so one empty response cannot
+ * burn the entire 120s generate budget.
+ */
 export const NVIDIA_MODEL_CANDIDATES = [
   "openai/gpt-oss-120b",
   "nvidia/nemotron-3-super-120b-a12b",
   "minimaxai/minimax-m3",
   "deepseek-ai/deepseek-v4-flash",
-  "z-ai/glm-5.2",
-  "deepseek-ai/deepseek-v4-pro",
 ] as const;
 
 export const DEFAULT_NVIDIA_MODEL = NVIDIA_MODEL_CANDIDATES[0];

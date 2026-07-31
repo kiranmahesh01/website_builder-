@@ -22,9 +22,12 @@ import {
 export const maxDuration = 120;
 export const runtime = "nodejs";
 
+const MAX_CHAT_CHARS = 12_000;
+const CHAT_HISTORY_LIMIT = 60;
+
 const schema = z.object({
   projectId: z.string().min(1),
-  message: z.string().min(1).max(4000),
+  message: z.string().min(1).max(MAX_CHAT_CHARS),
   provider: z
     .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
@@ -100,11 +103,27 @@ export async function POST(request: Request) {
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return jsonResponse({ error: "Invalid request" }, 400);
+    const tooLong = parsed.error.issues.some(
+      (i) => i.path.includes("message") && i.code === "too_big",
+    );
+    return jsonResponse(
+      {
+        error: tooLong
+          ? `Message is too long (max ${MAX_CHAT_CHARS} characters). Split it into a shorter request.`
+          : "Invalid request",
+      },
+      400,
+    );
   }
 
   const project = await prisma.project.findFirst({
     where: { id: parsed.data.projectId, userId: session.userId },
+    include: {
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: CHAT_HISTORY_LIMIT,
+      },
+    },
   });
   if (!project) {
     return jsonResponse({ error: "Project not found" }, 404);
@@ -147,9 +166,18 @@ export async function POST(request: Request) {
           data: { preferences: serializeUserPreferences(prefs) },
         });
         const prefBlock = preferencePromptBlock(prefs);
-        const refineRequest = prefBlock
-          ? `${parsed.data.message}\n\n${prefBlock}`
-          : parsed.data.message;
+        const recent = [...project.messages]
+          .reverse()
+          .slice(-12)
+          .map((m) => `${m.role}: ${m.content}`)
+          .join("\n");
+        const refineRequest = [
+          parsed.data.message,
+          prefBlock,
+          recent ? `Recent conversation:\n${recent}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
 
         const run = await runAgentLoop({
           mode: "refine",

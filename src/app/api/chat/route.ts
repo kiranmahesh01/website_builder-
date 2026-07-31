@@ -16,9 +16,12 @@ import {
 } from "@/lib/site-data";
 import { snapshotProjectVersion } from "@/lib/versions";
 
+const MAX_CHAT_CHARS = 12_000;
+const CHAT_HISTORY_LIMIT = 60;
+
 const schema = z.object({
   projectId: z.string().min(1),
-  message: z.string().min(1).max(4000),
+  message: z.string().min(1).max(MAX_CHAT_CHARS),
   provider: z
     .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
@@ -35,13 +38,26 @@ export async function POST(req: Request) {
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+      const tooLong = parsed.error.issues.some(
+        (i) => i.path.includes("message") && i.code === "too_big",
+      );
+      return NextResponse.json(
+        {
+          error: tooLong
+            ? `Message is too long (max ${MAX_CHAT_CHARS} characters). Split it into a shorter request.`
+            : "Invalid request",
+        },
+        { status: 400 },
+      );
     }
 
     const project = await prisma.project.findFirst({
       where: { id: parsed.data.projectId, userId: session.userId },
       include: {
-        messages: { orderBy: { createdAt: "asc" }, take: 20 },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: CHAT_HISTORY_LIMIT,
+        },
       },
     });
 
@@ -65,13 +81,23 @@ export async function POST(req: Request) {
     let reply: string;
     let run: Awaited<ReturnType<typeof runAgentLoop>> | null = null;
 
+    // Messages were fetched newest-first; restore chronological order.
+    const history = [...project.messages].reverse();
+
     if (existing) {
       const memory = await loadProjectMemory(project.id, existing.spec).catch(
         () => buildMemory(existing.spec),
       );
+      const recent = history
+        .slice(-12)
+        .map((m) => `${m.role}: ${m.content}`)
+        .join("\n");
+      const refineRequest = recent
+        ? `${parsed.data.message}\n\nRecent conversation:\n${recent}`
+        : parsed.data.message;
       run = await runAgentLoop({
         mode: "refine",
-        request: parsed.data.message,
+        request: refineRequest,
         provider,
         model,
         spec: existing.spec,
@@ -91,7 +117,7 @@ export async function POST(req: Request) {
         currentHtml: project.html,
         currentData: deserializeSiteData(project.data),
         instruction: parsed.data.message,
-        history: project.messages.map((m) => ({
+        history: history.map((m) => ({
           role: m.role,
           content: m.content,
         })),

@@ -34,6 +34,17 @@ export function availableProviders(): LlmProvider[] {
  * reliably than the OpenRouter free pool.
  */
 export function getDefaultProvider(): LlmProvider {
+  const fromEnv = process.env.DEFAULT_LLM_PROVIDER as LlmProvider | undefined;
+  // Honour an explicit default only when that provider is actually configured.
+  if (fromEnv === "nvidia" && process.env.NVIDIA_API_KEY) return "nvidia";
+  if (
+    (fromEnv === "openrouter" || fromEnv === "openrouter-best") &&
+    process.env.OPENROUTER_API_KEY
+  ) {
+    // NVIDIA wins when both keys exist — free NIM is more reliable for JSON.
+    if (process.env.NVIDIA_API_KEY) return "nvidia";
+    return fromEnv === "openrouter-best" ? "openrouter-best" : "openrouter";
+  }
   if (process.env.NVIDIA_API_KEY) return "nvidia";
   if (process.env.OPENROUTER_API_KEY) return "openrouter";
   if (process.env.OPENAI_API_KEY) return "openai";

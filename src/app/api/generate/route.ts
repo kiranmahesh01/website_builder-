@@ -13,7 +13,10 @@ import { assertCanCreateProject } from "@/lib/tier";
 import { titleFromPrompt } from "@/lib/utils";
 import { snapshotProjectVersion } from "@/lib/versions";
 import { expandPromptToExpertBrief } from "@/lib/prompt";
-import { buildMagicBlueprint } from "@/lib/blueprint";
+import {
+  buildMagicBlueprint,
+  magicBlueprintToWebsiteBlueprint,
+} from "@/lib/blueprint";
 import { applyDesignSystemToSpec } from "@/lib/design-system";
 import {
   parseUserPreferences,
@@ -26,8 +29,10 @@ import { ensureSeo } from "@/lib/agents/seo";
 
 export const maxDuration = 120;
 
+const MAX_PROMPT_CHARS = 12_000;
+
 const schema = z.object({
-  prompt: z.string().min(3).max(4000),
+  prompt: z.string().min(3).max(MAX_PROMPT_CHARS),
   provider: z
     .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
@@ -80,7 +85,17 @@ export async function POST(req: Request) {
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+      const tooLong = parsed.error.issues.some(
+        (i) => i.path.includes("prompt") && i.code === "too_big",
+      );
+      return NextResponse.json(
+        {
+          error: tooLong
+            ? `Prompt is too long (max ${MAX_PROMPT_CHARS} characters). Shorten it and try again.`
+            : "Invalid request",
+        },
+        { status: 400 },
+      );
     }
 
     if (!parsed.data.projectId) {
@@ -104,10 +119,12 @@ export async function POST(req: Request) {
 
     const magicBlueprint = buildMagicBlueprint({
       brief: parsed.data.prompt,
+      templateId: parsed.data.templateId,
     });
+    const seedBlueprint = magicBlueprintToWebsiteBlueprint(magicBlueprint);
 
-    // Generate → review → fix. One repair round is enough here: the pipeline
-    // already retries each stage internally, and generation is the expensive path.
+    // Generate → review → fix. Seed DNA/Magic Blueprint so designer LLM is
+    // skipped; keep one content LLM + at most one repair round (~30–50s).
     let run: AgentRunResult | null = null;
     try {
       run = await runAgentLoop({
@@ -116,7 +133,8 @@ export async function POST(req: Request) {
         provider,
         model,
         theme: parsed.data.theme,
-        templateId: parsed.data.templateId,
+        templateId: parsed.data.templateId || magicBlueprint.templateHints[0],
+        seedBlueprint,
         maxFixAttempts: 1,
       });
       // Design System Generator — apply tokens and re-render so HTML matches.

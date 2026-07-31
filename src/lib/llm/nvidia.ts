@@ -28,6 +28,35 @@ function stripReasoning(content: string): string {
   return cleaned.trim();
 }
 
+type NvidiaMessage = {
+  content?: string | null;
+  reasoning_content?: string | null;
+  reasoning?: string | null;
+};
+
+/**
+ * gpt-oss and other reasoning models often put the final answer in
+ * `content`, but under tight max_tokens (or mid-thought cutoff) `content`
+ * can be null while `reasoning_content` still holds recoverable JSON.
+ */
+function extractNvidiaText(message: NvidiaMessage | undefined): string {
+  const primary = stripReasoning(message?.content ?? "");
+  if (primary) return primary;
+
+  const reasoning = stripReasoning(
+    message?.reasoning_content || message?.reasoning || "",
+  );
+  if (!reasoning) return "";
+
+  // Prefer a JSON object embedded in the reasoning trace.
+  const jsonStart = reasoning.indexOf("{");
+  if (jsonStart >= 0) {
+    const fromJson = reasoning.slice(jsonStart).trim();
+    if (fromJson) return fromJson;
+  }
+  return reasoning;
+}
+
 async function callModel(
   client: OpenAI,
   model: string,
@@ -42,7 +71,8 @@ async function callModel(
       ...(useJson ? { response_format: { type: "json_object" } } : {}),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
-    const content = stripReasoning(completion.choices[0]?.message?.content ?? "");
+    const rawMessage = completion.choices[0]?.message as NvidiaMessage | undefined;
+    const content = extractNvidiaText(rawMessage);
     if (!content) {
       throw new Error(`NVIDIA (${model}) returned an empty response`);
     }
