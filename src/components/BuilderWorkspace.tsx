@@ -98,7 +98,7 @@ export function BuilderWorkspace({
   const [siteTheme, setSiteTheme] = useState<SiteThemeName>(DEFAULT_SITE_THEME);
   // Optimistic NVIDIA/DeepSeek defaults so the picker is correct before /api/providers loads.
   const [llmProvider, setLlmProvider] = useState("nvidia");
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_NVIDIA_MODEL);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_NVIDIA_MODEL);
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([
     ...NVIDIA_MODEL_OPTIONS,
   ]);
