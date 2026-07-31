@@ -1,8 +1,10 @@
 /**
  * Client-safe conversational intake for /create — scripted partner questions
  * that fill CreateWizardAnswers without an LLM call.
+ * Industry DNA discovery questions deepen Business Understanding.
  */
 
+import { matchWebsiteDna } from "@/lib/dna";
 import type { CreateWizardAnswers, StyleId, WebsiteTypeId } from "./brief";
 import { STYLES, WEBSITE_TYPES } from "./brief";
 
@@ -12,14 +14,14 @@ export type ChatTurn = {
 };
 
 export type ConversationQuestion = {
-  id: keyof CreateWizardAnswers | "confirm";
+  id: keyof CreateWizardAnswers | "confirm" | "coffeeModel" | "coffeeCustomers" | "diningStyle" | "bookingGoal" | "saasBuyer" | "saasMotion" | "reFocus" | "reArea" | "fitnessOffer" | "fitnessOfferType" | "hotelType" | "bookingChannel" | "portfolioCraft" | "portfolioIdeal" | "ecomCatalog" | "ecomFulfillment" | string;
   prompt: string;
   hint?: string;
   choices?: { id: string; label: string }[];
   freeText?: boolean;
 };
 
-const QUESTIONS: ConversationQuestion[] = [
+const BASE_BEFORE_INDUSTRY: ConversationQuestion[] = [
   {
     id: "websiteType",
     prompt: "What kind of website are we building?",
@@ -35,9 +37,15 @@ const QUESTIONS: ConversationQuestion[] = [
       { id: "Real estate", label: "Real estate" },
       { id: "Fitness", label: "Fitness" },
       { id: "SaaS", label: "SaaS" },
+      { id: "Hotel", label: "Hotel" },
+      { id: "Portfolio", label: "Portfolio" },
+      { id: "Ecommerce", label: "Ecommerce" },
     ],
     freeText: true,
   },
+];
+
+const BASE_AFTER_DNA: ConversationQuestion[] = [
   {
     id: "style",
     prompt: "Which visual style feels right?",
@@ -80,8 +88,24 @@ const QUESTIONS: ConversationQuestion[] = [
   },
 ];
 
-export function conversationQuestions(): ConversationQuestion[] {
-  return QUESTIONS;
+function dnaQuestions(industry: string): ConversationQuestion[] {
+  if (!industry.trim()) return [];
+  const match = matchWebsiteDna(industry, industry);
+  return match.dna.discoveryQuestions.map((q) => ({
+    id: q.id,
+    prompt: q.prompt,
+    hint: q.hint,
+    freeText: true,
+  }));
+}
+
+/** Industry-aware question list for Business Understanding Agent. */
+export function conversationQuestions(industryHint?: string): ConversationQuestion[] {
+  return [
+    ...BASE_BEFORE_INDUSTRY,
+    ...dnaQuestions(industryHint || ""),
+    ...BASE_AFTER_DNA,
+  ];
 }
 
 export function applyConversationAnswer(
@@ -105,7 +129,16 @@ export function applyConversationAnswer(
       break;
     }
     case "industry": {
-      const known = ["Coffee", "Restaurant", "Real estate", "Fitness", "SaaS"];
+      const known = [
+        "Coffee",
+        "Restaurant",
+        "Real estate",
+        "Fitness",
+        "SaaS",
+        "Hotel",
+        "Portfolio",
+        "Ecommerce",
+      ];
       const hit = known.find((k) => k.toLowerCase() === value.toLowerCase());
       if (hit) {
         next.industry = hit;
@@ -137,13 +170,25 @@ export function applyConversationAnswer(
         next[questionId] = value;
       }
       break;
-    default:
+    default: {
+      // DNA discovery answers append into extraDetails / goal enrichment.
+      const line = `${questionId}: ${value}`;
+      next.extraDetails = next.extraDetails
+        ? `${next.extraDetails}\n${line}`
+        : line;
+      if (/customer|audience|buyer|who/i.test(questionId) && !next.targetCustomers) {
+        next.targetCustomers = value;
+      }
+      if (/model|motion|focus|offer|catalog|type|style|channel/i.test(questionId) && !next.goal) {
+        next.goal = value;
+      }
       break;
+    }
   }
 
   return next;
 }
 
 export function openingMessage(): string {
-  return "I’ll help you plan the site like a partner. A few quick questions — then I’ll show an AI Website Plan and template matches before we generate.";
+  return "Tell Magic AI your business idea — I’ll plan like a strategist, then design, build, and improve your website. A few quick questions, then your Magic Blueprint.";
 }

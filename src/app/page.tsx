@@ -14,11 +14,11 @@ const included = [
 ];
 
 const comparisons = [
-  { them: "Pick a template, swap placeholder text", us: "Describe your business — we compose the page" },
-  { them: "Drag blocks for an hour", us: "Preview a full site in under a minute" },
+  { them: "Jump straight to a template", us: "Magic Blueprint strategizes before you build" },
+  { them: "Generic AI page generator", us: "Website DNA + design system per industry" },
+  { them: "One-shot generate and hope", us: "Multi-agent debate + Magic Score + Auto fix" },
+  { them: "No diagnosis of your current site", us: "AI Website Doctor audits URL/screenshot → fix plan" },
   { them: "Platform lock-in, no code export", us: "Export React, Astro, HTML, or WordPress XML" },
-  { them: "Decorative contact forms", us: "Working forms with lead inbox (like Durable)" },
-  { them: "Generic “welcome to our website” copy", us: "Brief parser pushes your name, city, and offer" },
 ];
 
 const testimonials = [
@@ -72,6 +72,9 @@ export default async function HomePage() {
           magic ai
         </Link>
         <nav className="flex items-center gap-4 text-sm">
+          <Link href="/doctor" className="hidden text-mist hover:text-fog sm:inline">
+            Doctor
+          </Link>
           <Link href="/compare" className="hidden text-mist hover:text-fog sm:inline">
             Compare
           </Link>
@@ -117,16 +120,17 @@ export default async function HomePage() {
 
       <section className="mx-auto flex min-h-[72vh] w-full max-w-5xl flex-col items-center justify-center px-6 pb-16 pt-8 text-center">
         <p className="animate-rise mb-4 text-sm uppercase tracking-[0.22em] text-mist">
-          Free AI website builder
+          AI Business Website Engineer
         </p>
         <h1 className="animate-rise font-[family-name:var(--font-display)] text-5xl font-extrabold leading-[1.05] tracking-tight text-fog sm:text-6xl lg:text-7xl">
-          Your business in a sentence.{" "}
-          <span className="text-lime">Your website in minutes.</span>
+          Tell Magic AI your business idea.{" "}
+          <span className="text-lime">
+            It plans, designs, builds, launches, and improves your website.
+          </span>
         </h1>
         <p className="animate-rise-delay mx-auto mt-6 max-w-2xl text-lg text-mist">
-          Type what you do — name, offer, city, vibe. Magic AI builds structured pages with
-          pro UI kits, lets you refine in chat, and publishes to a live URL. No code. No API
-          keys. Free to start.
+          Start with a Magic Blueprint — business analysis, customer strategy, site structure,
+          and design system — then generate, publish, and refine with Magic Score. Free to start.
         </p>
         <div className="mt-10 w-full">
           <HeroPrompt />

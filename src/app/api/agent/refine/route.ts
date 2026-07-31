@@ -12,6 +12,12 @@ import {
 } from "@/lib/site-data";
 import { snapshotProjectVersion } from "@/lib/versions";
 import type { AgentEvent } from "@/lib/agents/types";
+import {
+  appendCorrection,
+  parseUserPreferences,
+  serializeUserPreferences,
+  preferencePromptBlock,
+} from "@/lib/preferences";
 
 export const maxDuration = 120;
 export const runtime = "nodejs";
@@ -41,6 +47,9 @@ type StreamChunk =
           seo: number;
           performance: number;
           overall: number;
+          ux?: number;
+          conversion?: number;
+          accessibility?: number;
         };
         issues: {
           code: string;
@@ -124,9 +133,27 @@ export async function POST(request: Request) {
           () => buildMemory(existing.spec),
         );
 
+        // Personal AI Developer Memory — learn corrections + inject prefs.
+        const userRow = await prisma.user.findUnique({
+          where: { id: session.userId },
+          select: { preferences: true },
+        });
+        const prefs = appendCorrection(
+          parseUserPreferences(userRow?.preferences),
+          parsed.data.message,
+        );
+        await prisma.user.update({
+          where: { id: session.userId },
+          data: { preferences: serializeUserPreferences(prefs) },
+        });
+        const prefBlock = preferencePromptBlock(prefs);
+        const refineRequest = prefBlock
+          ? `${parsed.data.message}\n\n${prefBlock}`
+          : parsed.data.message;
+
         const run = await runAgentLoop({
           mode: "refine",
-          request: parsed.data.message,
+          request: refineRequest,
           provider,
           model,
           spec: existing.spec,

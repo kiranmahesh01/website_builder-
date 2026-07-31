@@ -21,6 +21,10 @@ import {
   openingMessage,
 } from "@/lib/create/conversation";
 import { pickThemeFromBrief } from "@/lib/themes";
+import {
+  MagicBlueprintPanel,
+  type MagicBlueprintPayload,
+} from "@/components/create/MagicBlueprintPanel";
 
 type PlanTemplateCard = {
   id: string;
@@ -35,7 +39,7 @@ type PlanTemplateCard = {
 
 const STEPS = [
   "Chat",
-  "Plan",
+  "Blueprint",
   "Template",
   "Generate",
 ] as const;
@@ -58,6 +62,8 @@ type PlanResponse = {
   templates: PlanTemplateCard[];
   browseTemplates?: PlanTemplateCard[];
   brandKit?: BrandKit;
+  blueprint?: MagicBlueprintPayload;
+  expandedBrief?: string;
   error?: string;
 };
 
@@ -85,6 +91,8 @@ export function CreateWizard() {
   const [mode, setMode] = useState<"chat" | "form">("chat");
   const [answers, setAnswers] = useState<CreateWizardAnswers>(EMPTY_CREATE_ANSWERS);
   const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const [blueprint, setBlueprint] = useState<MagicBlueprintPayload | null>(null);
+  const [expandedBrief, setExpandedBrief] = useState("");
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [browseTab, setBrowseTab] = useState<(typeof BROWSE_TABS)[number]["id"]>("matched");
@@ -102,7 +110,10 @@ export function CreateWizard() {
   const fileRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const questions = useMemo(() => conversationQuestions(), []);
+  const questions = useMemo(
+    () => conversationQuestions(answers.industry || answers.industryCustom),
+    [answers.industry, answers.industryCustom],
+  );
   const brief = useMemo(() => composeStructuredBrief(answers), [answers]);
   const currentQ = questions[qIndex];
 
@@ -167,7 +178,7 @@ export function CreateWizard() {
     setPlanBusy(true);
     setPlanError("");
     try {
-      const res = await fetch("/api/agent/plan", {
+      const res = await fetch("/api/agent/blueprint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -182,10 +193,12 @@ export function CreateWizard() {
       });
       const data = (await res.json()) as PlanResponse;
       if (!res.ok) {
-        setPlanError(data.error || "Could not build a plan. Try again.");
+        setPlanError(data.error || "Could not build a Magic Blueprint. Try again.");
         return null;
       }
       setPlan(data);
+      if (data.blueprint) setBlueprint(data.blueprint);
+      if (data.expandedBrief) setExpandedBrief(data.expandedBrief);
       if (data.brandKit) setBrandKit(data.brandKit);
       if (!selectedTemplateId && data.templates[0]) {
         setSelectedTemplateId(data.templates[0].id);
@@ -207,22 +220,24 @@ export function CreateWizard() {
     setChat((prev) => [...prev, { role: "user", content: value }]);
     setChatInput("");
 
+    const nextQuestions = conversationQuestions(
+      nextAnswers.industry || nextAnswers.industryCustom,
+    );
     const nextIndex = qIndex + 1;
-    if (nextIndex >= questions.length) {
+    if (nextIndex >= nextQuestions.length) {
       setChat((prev) => [
         ...prev,
         {
           role: "assistant",
           content:
-            "Thanks — I’ll draft an AI Website Plan and template matches next. You can still edit details in form mode.",
+            "Thanks — I’ll draft your Magic Blueprint (strategy + design system) and template matches next. You can still edit details in form mode.",
         },
       ]);
       void (async () => {
-        // compose brief from nextAnswers immediately
         const composed = composeStructuredBrief(nextAnswers);
         setPlanBusy(true);
         try {
-          const res = await fetch("/api/agent/plan", {
+          const res = await fetch("/api/agent/blueprint", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -233,14 +248,16 @@ export function CreateWizard() {
           const data = (await res.json()) as PlanResponse;
           if (res.ok) {
             setPlan(data);
+            if (data.blueprint) setBlueprint(data.blueprint);
+            if (data.expandedBrief) setExpandedBrief(data.expandedBrief);
             if (data.brandKit) setBrandKit(data.brandKit);
             if (data.templates[0]) setSelectedTemplateId(data.templates[0].id);
             setStep(1);
           } else {
-            setPlanError(data.error || "Could not build a plan.");
+            setPlanError(data.error || "Could not build a Magic Blueprint.");
           }
         } catch {
-          setPlanError("Network error while building the plan.");
+          setPlanError("Network error while building the blueprint.");
         } finally {
           setPlanBusy(false);
         }
@@ -249,7 +266,7 @@ export function CreateWizard() {
     }
 
     setQIndex(nextIndex);
-    const nextQ = questions[nextIndex];
+    const nextQ = nextQuestions[nextIndex];
     setChat((prev) => [
       ...prev,
       {
@@ -327,12 +344,20 @@ export function CreateWizard() {
 
   function generate() {
     const theme = pickThemeFromBrief(brief);
-    const params = new URLSearchParams({ prompt: brief, theme });
+    const promptForBuild = expandedBrief || brief;
+    const params = new URLSearchParams({ prompt: promptForBuild, theme });
     if (selectedTemplateId) params.set("templateId", selectedTemplateId);
     if (brandKit) {
       params.set("brandKit", "1");
       try {
         sessionStorage.setItem("magic-brand-kit", JSON.stringify(brandKit));
+      } catch {
+        // ignore
+      }
+    }
+    if (blueprint) {
+      try {
+        sessionStorage.setItem("magic-blueprint", JSON.stringify(blueprint));
       } catch {
         // ignore
       }
@@ -395,10 +420,10 @@ export function CreateWizard() {
         </div>
 
         <h1 className="mt-5 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
-          {step === 0 && "Tell me about the site"}
-          {step === 1 && "AI Website Plan"}
+          {step === 0 && "Tell Magic AI your business idea"}
+          {step === 1 && "Magic Blueprint"}
           {step === 2 && "Choose a template"}
-          {step === 3 && "Ready to generate"}
+          {step === 3 && "Ready to build & launch"}
         </h1>
 
         <div className="mt-8 space-y-4">
@@ -419,7 +444,7 @@ export function CreateWizard() {
                 ))}
                 {planBusy ? (
                   <p className="animate-pulse text-xs text-lime">
-                    Building your AI Website Plan…
+                    Building your Magic Blueprint…
                   </p>
                 ) : null}
                 <div ref={chatEndRef} />
@@ -583,37 +608,19 @@ export function CreateWizard() {
             <div className="space-y-4">
               {planBusy ? (
                 <p className="animate-pulse text-sm text-lime">
-                  Building your AI Website Plan…
+                  Building your Magic Blueprint…
                 </p>
               ) : null}
               {planError ? <p className="text-sm text-coral">{planError}</p> : null}
-              {plan ? (
+              {blueprint ? <MagicBlueprintPanel blueprint={blueprint} /> : null}
+              {!blueprint && plan ? (
                 <div className="rounded-2xl border border-[var(--line)] bg-ink-soft p-4 sm:p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-mist">
-                        AI Website Plan
-                      </p>
-                      <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl font-bold">
-                        {plan.summary}
-                      </h2>
-                    </div>
-                    <span className="rounded-full border border-lime/40 px-3 py-1 text-xs text-lime">
-                      Preview {plan.designScorePreview}/100
-                    </span>
-                  </div>
-                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                    <PlanRow label="Industry" value={plan.industry} />
-                    <PlanRow label="Website type" value={plan.websiteType} />
-                    <PlanRow label="Pages" value={plan.pages.join(" · ")} />
-                    <PlanRow label="Design" value={plan.design.style} />
-                    <PlanRow
-                      label="Sections"
-                      value={plan.sections
-                        .map((s) => s.replace(/_/g, " "))
-                        .join(", ")}
-                    />
-                  </dl>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-mist">
+                    Plan preview
+                  </p>
+                  <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl font-bold">
+                    {plan.summary}
+                  </h2>
                 </div>
               ) : null}
               {brandKit ? (
@@ -719,7 +726,7 @@ export function CreateWizard() {
               {step === 0
                 ? planBusy
                   ? "Planning…"
-                  : "See AI plan"
+                  : "See Magic Blueprint"
                 : step === 1
                   ? "Choose template"
                   : "Continue"}
@@ -730,7 +737,7 @@ export function CreateWizard() {
               onClick={generate}
               className="rounded-full bg-lime px-6 py-2.5 text-sm font-semibold text-ink"
             >
-              Generate website
+              Build website
             </button>
           )}
 
@@ -740,20 +747,11 @@ export function CreateWizard() {
               onClick={generate}
               className="rounded-full border border-lime/40 px-5 py-2.5 text-sm text-lime"
             >
-              Generate website
+              Build from Blueprint
             </button>
           ) : null}
         </div>
       </div>
     </main>
-  );
-}
-
-function PlanRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[10px] uppercase tracking-[0.16em] text-mist">{label}</dt>
-      <dd className="mt-1 text-fog">{value}</dd>
-    </div>
   );
 }

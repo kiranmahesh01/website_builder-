@@ -337,7 +337,7 @@ export function BuilderWorkspace({
       }
       const scoreNote =
         data.review != null
-          ? ` Quality ${data.review.scores?.overall ?? data.review.score}/100 — use Auto improve or chat to polish.`
+          ? ` Magic Score ${data.review.scores?.overall ?? data.review.score}/100 — use Auto fix or chat to polish.`
           : "";
       setMessages([
         { role: "user", content: value },

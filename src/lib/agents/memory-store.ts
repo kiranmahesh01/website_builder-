@@ -38,6 +38,7 @@ export async function saveProjectMemory(
     brand: memory.brand,
     theme: memory.theme,
     designTokens: safeJson(memory.design),
+    designSystem: safeJson(memory.design),
     digest: memoryDigest(memory),
     revision,
   };

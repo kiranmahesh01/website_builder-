@@ -76,6 +76,10 @@ export type QualityScores = {
   seo: number;
   performance: number;
   overall: number;
+  /** Magic Score extensions */
+  ux?: number;
+  conversion?: number;
+  accessibility?: number;
 };
 
 export type ReviewReport = {

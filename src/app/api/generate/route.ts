@@ -12,6 +12,17 @@ import { serializeProjectData, serializeSiteData } from "@/lib/site-data";
 import { assertCanCreateProject } from "@/lib/tier";
 import { titleFromPrompt } from "@/lib/utils";
 import { snapshotProjectVersion } from "@/lib/versions";
+import { expandPromptToExpertBrief } from "@/lib/prompt";
+import { buildMagicBlueprint } from "@/lib/blueprint";
+import { applyDesignSystemToSpec } from "@/lib/design-system";
+import {
+  parseUserPreferences,
+  preferencePromptBlock,
+} from "@/lib/preferences";
+import { learnFromMagicNotes } from "@/lib/magic-score";
+import { renderSpecToHtml } from "@/lib/render-site";
+import { specToWebsite } from "@/lib/spec/to-website";
+import { ensureSeo } from "@/lib/agents/seo";
 
 export const maxDuration = 120;
 
@@ -79,19 +90,51 @@ export async function POST(req: Request) {
     const provider = resolveProvider(parsed.data.provider);
     const model = resolveModel(provider, parsed.data.model);
 
+    // Prompt Optimization Engine — expand short ideas into expert briefs.
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { preferences: true },
+    });
+    const prefs = parseUserPreferences(user?.preferences);
+    const prefBlock = preferencePromptBlock(prefs);
+    const expanded = expandPromptToExpertBrief({ idea: parsed.data.prompt });
+    const requestPrompt = [expanded.expandedBrief, prefBlock]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const magicBlueprint = buildMagicBlueprint({
+      brief: parsed.data.prompt,
+    });
+
     // Generate → review → fix. One repair round is enough here: the pipeline
     // already retries each stage internally, and generation is the expensive path.
     let run: AgentRunResult | null = null;
     try {
       run = await runAgentLoop({
         mode: "generate",
-        request: parsed.data.prompt,
+        request: requestPrompt,
         provider,
         model,
         theme: parsed.data.theme,
         templateId: parsed.data.templateId,
         maxFixAttempts: 1,
       });
+      // Design System Generator — apply tokens and re-render so HTML matches.
+      if (run?.spec) {
+        const nextSpec = ensureSeo(
+          applyDesignSystemToSpec(run.spec, magicBlueprint.designPlan),
+        );
+        const website = specToWebsite(nextSpec);
+        const html = await renderSpecToHtml(nextSpec);
+        run = { ...run, spec: nextSpec, website, html };
+        if (run.review.scores) {
+          learnFromMagicNotes(
+            run.review.issues.map((i) => i.message),
+            run.review.scores,
+            magicBlueprint.dna.industry,
+          );
+        }
+      }
     } catch (agentError) {
       console.error("agent generate failed, using legacy generator", agentError);
     }
@@ -99,7 +142,7 @@ export async function POST(req: Request) {
     const legacy = run
       ? null
       : await generateWebsite({
-          prompt: parsed.data.prompt,
+          prompt: requestPrompt,
           provider,
           model,
           fast: parsed.data.fast,

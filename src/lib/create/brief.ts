@@ -19,6 +19,9 @@ export const INDUSTRIES = [
   "Real estate",
   "Fitness",
   "SaaS",
+  "Hotel",
+  "Portfolio",
+  "Ecommerce",
 ] as const;
 
 export const STYLES = [

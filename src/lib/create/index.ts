@@ -30,3 +30,8 @@ export {
   type ConversationQuestion,
 } from "./conversation";
 export { mapIndustryToTemplate, enrichBriefForSearch } from "./industry";
+
+// Re-export strategist stack entry points used by create / generate.
+export { buildMagicBlueprint } from "@/lib/blueprint";
+export { matchWebsiteDna } from "@/lib/dna";
+export { expandPromptToExpertBrief } from "@/lib/prompt";

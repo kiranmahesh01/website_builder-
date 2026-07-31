@@ -15,6 +15,8 @@ model User {
   passwordHash String
   image        String?
   plan         String            @default("free")
+  /// JSON: Personal AI Developer memory — styles, themes, fonts, corrections.
+  preferences  String?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   accounts     Account[]
@@ -23,6 +25,21 @@ model User {
   assets       Asset[]
   creatives    CreativeProject[]
   leads        Lead[]
+  evaluationPatterns EvaluationPattern[]
+}
+
+/// Feedback intelligence v1 — good/bad evaluation patterns for future prompts.
+model EvaluationPattern {
+  id        String   @id @default(cuid())
+  kind      String
+  dimension String
+  pattern   String
+  industry  String?
+  createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([dimension, kind])
 }
 
 model Account {
@@ -95,6 +112,10 @@ model ProjectMemory {
   theme        String
   /// JSON: DesignTokens overlay applied on top of the theme preset.
   designTokens String?
+  /// JSON: Magic DesignSystem (colors, typography, spacing, buttons).
+  designSystem String?
+  /// JSON: Magic Blueprint snapshot (strategy before build).
+  blueprint    String?
   /// JSON: compact site digest injected into agent prompts.
   digest       String?
   revision     Int          @default(1)

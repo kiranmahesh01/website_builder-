@@ -481,6 +481,73 @@ async function main() {
     JSON.stringify(generated.spec.design),
   );
 
+  console.log("\nWebsite DNA + Magic Blueprint + Magic Score");
+  const { matchWebsiteDna, listWebsiteDna } = await import("@/lib/dna");
+  const { buildMagicBlueprint } = await import("@/lib/blueprint");
+  const { expandPromptToExpertBrief } = await import("@/lib/prompt");
+  const { computeMagicScore } = await import("@/lib/magic-score");
+  const { generateDesignSystem } = await import("@/lib/design-system");
+  const { auditWebsite } = await import("@/lib/doctor");
+
+  check("DNA library has ≥8 industries", listWebsiteDna().length >= 8);
+  const coffeeDna = matchWebsiteDna("Northbeam Coffee cafe with subscription");
+  check("DNA matches coffee", coffeeDna.dna.id === "coffee", coffeeDna.dna.id);
+  const saasDna = matchWebsiteDna("B2B analytics SaaS with free trial");
+  check("DNA matches saas", saasDna.dna.id === "saas", saasDna.dna.id);
+
+  const expanded = expandPromptToExpertBrief({
+    idea: "Northbeam Coffee in Portland — walk-ins and wholesale",
+  });
+  check(
+    "prompt expander produces expert brief",
+    expanded.expandedBrief.includes("Industry:") &&
+      expanded.expandedBrief.includes("Primary CTAs:"),
+  );
+
+  const magic = buildMagicBlueprint({
+    brief:
+      "Business: Northbeam Coffee\nIndustry: Coffee\nGoal: Attract walk-ins\nTarget: Remote workers\nStyle: minimal",
+    websiteType: "business",
+  });
+  check("blueprint has business analysis", Boolean(magic.businessAnalysis.positioning));
+  check(
+    "blueprint has customer strategy",
+    magic.customerStrategy.desires.length >= 2,
+  );
+  check(
+    "blueprint website structure includes why",
+    magic.websiteStructure.every((s) => s.why.length > 8),
+  );
+  check("blueprint has design plan tokens", Boolean(magic.designPlan.tokens.primary));
+  check(
+    "blueprint debate has 4 personas",
+    magic.debate.opinions.length === 4,
+  );
+  check(
+    "blueprint manager decision sets CTA",
+    Boolean(magic.debate.managerDecision.ctaStrength),
+  );
+
+  const ds = generateDesignSystem({ dna: coffeeDna.dna, style: "minimal" });
+  check("design system zod-valid colors", /^#/.test(ds.colors.primary));
+
+  const scored = computeMagicScore(generated.spec, generated.review.issues, {
+    html: generated.html,
+    brief: PROMPT,
+  });
+  check(
+    "magic score has conversion + a11y",
+    typeof scored.scores.conversion === "number" &&
+      typeof scored.scores.accessibility === "number",
+  );
+  check("magic score overall 0–100", scored.scores.overall >= 0 && scored.scores.overall <= 100);
+
+  const doctor = await auditWebsite({
+    htmlHint: `<html><head><title>Acme Cafe</title><meta name="description" content="Fresh coffee and pastry in downtown."/></head><body><h1>Acme Cafe</h1><h2>Menu</h2><a href="/order">Order online</a><p>Trusted by locals.</p></body></html>`,
+  });
+  check("doctor returns scores", doctor.scores.overall > 0);
+  check("doctor fix brief is non-empty", doctor.fixBrief.length > 40);
+
   console.log(`\n${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exit(1);
 }

@@ -28,14 +28,14 @@ export function HeroPrompt() {
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Describe your business in a sentence — name, offer, city, vibe…"
-          aria-label="Website brief"
+          placeholder="Tell Magic AI your business idea — we’ll blueprint, then build…"
+          aria-label="Business idea"
         />
         <button
           type="submit"
           className="rounded-full bg-lime px-6 py-3 text-sm font-semibold text-ink transition hover:bg-lime-deep"
         >
-          Start
+          Plan & build
         </button>
       </form>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
@@ -52,6 +52,10 @@ export function HeroPrompt() {
       </div>
       <p className="mt-6 text-center text-sm text-mist">
         Free to start — no API keys.{" "}
+        <Link href="/doctor" className="text-lime underline-offset-2 hover:underline">
+          Audit a site
+        </Link>
+        {" · "}
         <Link href="/login" className="text-lime underline-offset-2 hover:underline">
           Log in
         </Link>{" "}

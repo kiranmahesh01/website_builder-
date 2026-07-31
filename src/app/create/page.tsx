@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import { CreateWizard } from "@/components/create/CreateWizard";
 
 export const metadata = {
-  title: "Create a website — Magic AI",
+  title: "Create — Magic AI Blueprint",
   description:
-    "Guided create wizard: website type, industry, style, AI plan, and template pick before generate.",
+    "Tell Magic AI your business idea. Get a Magic Blueprint — analysis, strategy, structure, design system — then build and launch.",
 };
 
 export default function CreatePage() {

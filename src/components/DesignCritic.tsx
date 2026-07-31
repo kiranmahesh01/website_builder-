@@ -15,6 +15,9 @@ export type QualityScores = {
   seo: number;
   performance: number;
   overall: number;
+  ux?: number;
+  conversion?: number;
+  accessibility?: number;
 };
 
 export type CriticReview = {
@@ -53,7 +56,7 @@ export function DesignCritic({
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-mist">
-            Website Quality Score
+            Magic Score
           </p>
           <p className="mt-1 font-[family-name:var(--font-display)] text-sm font-semibold text-fog">
             Overall{" "}
@@ -68,17 +71,19 @@ export function DesignCritic({
           disabled={busy || (scoreOk && issueCount === 0)}
           className="shrink-0 rounded-full bg-lime px-3 py-1.5 text-[11px] font-semibold text-ink disabled:opacity-40"
         >
-          Auto improve
+          Auto fix
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {(
           [
             ["Design", scores.design],
-            ["Mobile", scores.mobile],
+            ["UX", scores.ux ?? scores.mobile],
             ["SEO", scores.seo],
             ["Perf", scores.performance],
+            ["Convert", scores.conversion ?? scores.overall],
+            ["A11y", scores.accessibility ?? scores.mobile],
           ] as const
         ).map(([label, value]) => (
           <div
@@ -139,15 +144,15 @@ export function buildAutoImproveMessage(review: CriticReview): string {
     return `${i + 1}. [${issue.severity}] ${issue.message}.${hint}`;
   });
   return [
-    "Auto-improve this website using the Website Quality Score findings.",
+    "Auto-fix this website using Magic Score findings.",
     scores
-      ? `Scores — overall ${scores.overall}, design ${scores.design}, mobile ${scores.mobile}, SEO ${scores.seo}, performance ${scores.performance}.`
-      : `Current score: ${review.score}/100.`,
+      ? `Magic Score — overall ${scores.overall}, design ${scores.design}, UX ${scores.ux ?? scores.mobile}, SEO ${scores.seo}, performance ${scores.performance}, conversion ${scores.conversion ?? "n/a"}, accessibility ${scores.accessibility ?? "n/a"}.`
+      : `Current Magic Score: ${review.score}/100.`,
     "Fix these issues without changing the business or brand:",
     ...(lines.length
       ? lines
       : [
-          "Improve contrast, tighten hero copy, strengthen SEO title/description, and keep mobile layout clean.",
+          "Improve contrast, tighten hero copy, strengthen SEO title/description, conversion CTA, and accessibility.",
         ]),
     "Prefer concrete visual and content fixes over rewriting the whole site.",
   ].join("\n");
