@@ -2,8 +2,8 @@
  * NVIDIA NIM (build.nvidia.com) — OpenAI-compatible catalog of hosted models.
  *
  * Free tier is rate limited (~40 requests/minute) rather than credit limited,
- * so the chain below is ordered by output quality first and the caller is
- * expected to fall through on 429.
+ * so the chain below prefers faster models first, then stronger/slower
+ * quality fallbacks; the caller falls through on 429/empty/invalid JSON.
  */
 
 export const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
@@ -15,22 +15,20 @@ export const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
  * unusable here even though its output is excellent.
  *
  * Measured single-call latency on a JSON site-plan prompt:
- *   gpt-oss-120b 5s · nemotron-3-super 7s · minimax-m3 22s ·
+ *   deepseek-v4-flash (primary) · gpt-oss-120b · nemotron-3-ultra ·
  *   deepseek-v4-flash 27s · glm-5.2 60s · deepseek-v4-pro 80s
  *
  * Re-measure with `npx tsx scripts/probe-nvidia.ts` and override via
  * NVIDIA_MODEL / NVIDIA_FALLBACK_MODELS; the catalog changes often.
  */
 /**
- * Auto-fallback chain stays on models that finish in ~5–30s. Slower frontier
- * models (GLM / DeepSeek Pro ~60–80s) are omitted so one empty response cannot
- * burn the entire 120s generate budget.
+ * Auto-fallback chain: deepseek-v4-flash → gpt-oss-120b → nemotron-3-ultra.
+ * Slow GLM / DeepSeek Pro are omitted from the default chain.
  */
 export const NVIDIA_MODEL_CANDIDATES = [
-  "openai/gpt-oss-120b",
-  "nvidia/nemotron-3-super-120b-a12b",
-  "minimaxai/minimax-m3",
   "deepseek-ai/deepseek-v4-flash",
+  "openai/gpt-oss-120b",
+  "nvidia/nemotron-3-ultra-550b-a55b",
 ] as const;
 
 export const DEFAULT_NVIDIA_MODEL = NVIDIA_MODEL_CANDIDATES[0];
@@ -83,22 +81,22 @@ export const NVIDIA_MODEL_OPTIONS: {
   {
     id: DEFAULT_NVIDIA_MODEL,
     label: "Auto (NVIDIA)",
-    role: "Default — NVIDIA NIM primary + fallbacks",
-  },
-  {
-    id: "nvidia/nemotron-3-super-120b-a12b",
-    label: "Nemotron Super",
-    role: "Strong NVIDIA fallback",
-  },
-  {
-    id: "minimaxai/minimax-m3",
-    label: "MiniMax M3",
-    role: "Balanced NVIDIA fallback",
+    role: "DeepSeek Flash → GPT-OSS 120B → Ultra",
   },
   {
     id: "deepseek-ai/deepseek-v4-flash",
     label: "DeepSeek V4 Flash",
-    role: "Faster NVIDIA fallback",
+    role: "Primary — thinking (medium effort)",
+  },
+  {
+    id: "openai/gpt-oss-120b",
+    label: "GPT-OSS 120B",
+    role: "Strong GPT-OSS fallback",
+  },
+  {
+    id: "nvidia/nemotron-3-ultra-550b-a55b",
+    label: "Nemotron Ultra 550B",
+    role: "Last-resort quality (slower)",
   },
 ];
 
@@ -128,10 +126,26 @@ export function nvidiaVisionModel(): string {
  */
 export function nvidiaSupportsJsonObject(model: string): boolean {
   const id = model.toLowerCase();
-  if (id.includes("reasoning") || id.includes("-r1") || id.includes("thinking")) {
+  if (
+    id.includes("reasoning") ||
+    id.includes("-r1") ||
+    id.includes("thinking") ||
+    id.includes("nemotron-3-ultra") ||
+    id.includes("deepseek-v4")
+  ) {
     return false;
   }
   return true;
+}
+
+/** DeepSeek V4 Flash — thinking via chat_template_kwargs. */
+export function isDeepseekFlashModel(model: string): boolean {
+  return model.toLowerCase().includes("deepseek-v4-flash");
+}
+
+/** Huge thinking model — keep last in the chain and cap token budgets. */
+export function isNvidiaUltraModel(model: string): boolean {
+  return model.toLowerCase().includes("nemotron-3-ultra");
 }
 
 export function isRetryableNvidiaError(message: string): boolean {

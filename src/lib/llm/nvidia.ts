@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 import type { ChatMessage } from "./types";
 import {
+  isDeepseekFlashModel,
+  isNvidiaUltraModel,
   isRetryableNvidiaError,
   nvidiaModelChain,
   nvidiaSupportsJsonObject,
@@ -43,6 +45,7 @@ function extractNvidiaText(message: NvidiaMessage | undefined): string {
   const primary = stripReasoning(message?.content ?? "");
   if (primary) return primary;
 
+  // DeepSeek / gpt-oss / Nemotron may use either field when content is empty.
   const reasoning = stripReasoning(
     message?.reasoning_content || message?.reasoning || "",
   );
@@ -57,18 +60,47 @@ function extractNvidiaText(message: NvidiaMessage | undefined): string {
   return reasoning;
 }
 
+function nvidiaSampling(model: string, maxTokens: number) {
+  if (isDeepseekFlashModel(model)) {
+    return {
+      temperature: 1,
+      top_p: 0.95,
+      // Cap well below 16k so JSON pipeline steps stay inside latency budget.
+      max_tokens: Math.min(maxTokens, 8192),
+      chat_template_kwargs: {
+        thinking: true,
+        reasoning_effort: "medium",
+      },
+    } as const;
+  }
+  if (isNvidiaUltraModel(model)) {
+    // Ultra with thinking is slow; keep pipeline budgets bounded.
+    return {
+      temperature: 1,
+      top_p: 0.95,
+      max_tokens: Math.min(maxTokens, 8192),
+      chat_template_kwargs: { enable_thinking: true },
+      reasoning_budget: 4096,
+    } as const;
+  }
+  return {
+    temperature: 0.4,
+    max_tokens: maxTokens,
+  } as const;
+}
+
 async function callModel(
   client: OpenAI,
   model: string,
   messages: ChatMessage[],
-  options: { maxTokens: number; wantJson: boolean },
+  options: { maxTokens: number; useJsonFormat: boolean; expectJson: boolean },
 ): Promise<string> {
   const attempt = async (useJson: boolean) => {
+    const sampling = nvidiaSampling(model, options.maxTokens);
     const completion = await client.chat.completions.create({
       model,
-      temperature: 0.4,
-      max_tokens: options.maxTokens,
-      ...(useJson ? { response_format: { type: "json_object" } } : {}),
+      ...sampling,
+      ...(useJson ? { response_format: { type: "json_object" as const } } : {}),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
     const rawMessage = completion.choices[0]?.message as NvidiaMessage | undefined;
@@ -76,10 +108,24 @@ async function callModel(
     if (!content) {
       throw new Error(`NVIDIA (${model}) returned an empty response`);
     }
+    if (options.expectJson) {
+      const trimmed = content.trim();
+      const start = trimmed.indexOf("{");
+      const end = trimmed.lastIndexOf("}");
+      const candidate =
+        start >= 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
+      try {
+        JSON.parse(candidate);
+      } catch {
+        throw new Error(
+          `NVIDIA (${model}) returned invalid json (unusable for pipeline)`,
+        );
+      }
+    }
     return content;
   };
 
-  if (!options.wantJson) return attempt(false);
+  if (!options.useJsonFormat) return attempt(false);
 
   try {
     return await attempt(true);
@@ -124,11 +170,16 @@ export async function generateWithNvidia(
   const maxTokens = options?.maxTokens ?? 6500;
   const chain = nvidiaModelChain(options?.model);
   const errors: string[] = [];
+  const expectJson = options?.json === true;
 
   for (const model of chain) {
-    const wantJson = options?.json === true && nvidiaSupportsJsonObject(model);
+    const useJsonFormat = expectJson && nvidiaSupportsJsonObject(model);
     try {
-      return await callModel(client, model, messages, { maxTokens, wantJson });
+      return await callModel(client, model, messages, {
+        maxTokens,
+        useJsonFormat,
+        expectJson,
+      });
     } catch (error) {
       const err = normalizeError(error, model);
       errors.push(err.message);
