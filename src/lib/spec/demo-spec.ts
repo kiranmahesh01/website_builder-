@@ -26,7 +26,7 @@ export function buildDemoPlan(prompt: string, theme?: string | null): Plan {
   };
 }
 
-function demoContentForSection(
+export function demoContentForSection(
   id: SectionId,
   brand: string,
   prompt: string,
@@ -109,6 +109,24 @@ function demoContentForSection(
       return {
         headline: `Ready to work with ${brand}?`,
         ctaLabel: "Contact us",
+      };
+    case "blog_teasers":
+      return {
+        headline: "From the journal",
+        items: [
+          {
+            title: `Why ${brand} focuses on ${city}`,
+            body: "A short note on how we approach the work.",
+          },
+          {
+            title: "What clients ask first",
+            body: "Practical answers before you book or buy.",
+          },
+          {
+            title: "Behind a recent project",
+            body: "Process notes without the fluff.",
+          },
+        ],
       };
     case "footer_simple":
       return { tagline: `${brand} — ${city}` };

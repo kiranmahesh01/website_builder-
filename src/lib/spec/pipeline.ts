@@ -1,4 +1,3 @@
-import { parseBrief } from "@/lib/brief-parser";
 import { generateWithNvidia } from "@/lib/llm/nvidia";
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
 import {
@@ -23,6 +22,7 @@ import {
   parsePageContent,
   parsePlan,
   parseStructure,
+  type DesignTokens,
   type Plan,
   type SectionId,
   type SiteSpec,
@@ -35,6 +35,16 @@ import {
   validateSectionContent,
   validateStructure,
 } from "./validate";
+import { parseBrief } from "@/lib/brief-parser";
+
+/** Optional designer blueprint — skips structure LLM when sections are known. */
+export type PipelineBlueprint = {
+  theme?: Plan["theme"];
+  sections?: SectionId[];
+  design?: DesignTokens;
+  /** Injected into content prompts (tone / avoid / headline patterns). */
+  digest?: string;
+};
 
 const MAX_RETRIES = 2;
 
@@ -88,7 +98,11 @@ async function tryCallJson(
   }
 }
 
-function businessContext(prompt: string, plan: Plan): string {
+function businessContext(
+  prompt: string,
+  plan: Plan,
+  blueprint?: PipelineBlueprint | null,
+): string {
   const brief = parseBrief(prompt);
   return [
     `Brand: ${plan.brand}`,
@@ -96,10 +110,43 @@ function businessContext(prompt: string, plan: Plan): string {
     brief.exactPhrases.length
       ? `Exact phrases to use: ${brief.exactPhrases.join("; ")}`
       : null,
+    blueprint?.digest ? `Design blueprint:\n${blueprint.digest}` : null,
     `Original brief: ${prompt}`,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function planFromBlueprint(
+  prompt: string,
+  preferredTheme: string | null | undefined,
+  blueprint?: PipelineBlueprint | null,
+): Plan {
+  const brief = parseBrief(prompt);
+  const brand =
+    brief.brandHint ||
+    prompt
+      .replace(/["']/g, " ")
+      .split(/\s+/)
+      .slice(0, 4)
+      .join(" ")
+      .trim()
+      .slice(0, 48) ||
+    "Studio";
+  const theme = (blueprint?.theme ||
+    preferredTheme ||
+    "bold_startup") as Plan["theme"];
+  return {
+    theme,
+    brand,
+    pages: [
+      {
+        slug: "home",
+        title: "Home",
+        intent: `Homepage for ${brand}: ${prompt.slice(0, 180)}`,
+      },
+    ],
+  };
 }
 
 async function callPlan(
@@ -230,23 +277,42 @@ export async function generateSiteSpec(input: {
   provider: Exclude<LlmProvider, "demo" | "openrouter-best">;
   theme?: string | null;
   model?: string | null;
+  blueprint?: PipelineBlueprint | null;
 }): Promise<SiteSpec> {
-  const plan = await callPlan(
-    input.provider,
-    input.prompt,
-    input.theme,
-    input.model,
-  );
-  const context = businessContext(input.prompt, plan);
+  const preferredTheme = input.theme || input.blueprint?.theme || null;
+
+  // When the designer already chose theme + sections, skip the plan LLM and
+  // build a deterministic plan — saves a round-trip toward the ~50s budget.
+  const plan =
+    input.blueprint?.sections && input.blueprint.sections.length >= 5
+      ? planFromBlueprint(input.prompt, preferredTheme, input.blueprint)
+      : await callPlan(
+          input.provider,
+          input.prompt,
+          preferredTheme,
+          input.model,
+        );
+
+  const context = businessContext(input.prompt, plan, input.blueprint);
 
   const pages = await Promise.all(
     plan.pages.map(async (page) => {
-      const sectionIds = await callStructure(
-        input.provider,
-        page.intent,
-        context,
-        input.model,
-      );
+      let sectionIds: SectionId[];
+      if (input.blueprint?.sections && input.blueprint.sections.length >= 5) {
+        const normalized = normalizeStructure(input.blueprint.sections);
+        sectionIds =
+          validateStructure(normalized) === null
+            ? normalized
+            : DEFAULT_SECTIONS;
+      } else {
+        sectionIds = await callStructure(
+          input.provider,
+          page.intent,
+          context,
+          input.model,
+        );
+      }
+
       const sections = await callPageContent(
         input.provider,
         sectionIds,
@@ -269,6 +335,10 @@ export async function generateSiteSpec(input: {
       title: `${plan.brand}`,
       description: input.prompt.slice(0, 155),
     },
+    design:
+      input.blueprint?.design && Object.keys(input.blueprint.design).length > 0
+        ? input.blueprint.design
+        : undefined,
     pages,
   };
 }
@@ -279,9 +349,20 @@ export async function runSpecPipeline(input: {
   theme?: string | null;
   uiKit?: string | null;
   model?: string | null;
+  blueprint?: PipelineBlueprint | null;
 }): Promise<SpecPipelineResult> {
   if (input.provider === "demo") {
-    const spec = buildDemoSpec(input.prompt, input.theme);
+    const demo = buildDemoSpec(
+      input.prompt,
+      input.theme || input.blueprint?.theme,
+    );
+    const spec: SiteSpec = {
+      ...demo,
+      design:
+        input.blueprint?.design && Object.keys(input.blueprint.design).length > 0
+          ? { ...demo.design, ...input.blueprint.design }
+          : demo.design,
+    };
     const website = specToWebsite(spec, {
       theme: input.theme || spec.theme,
       uiKit: input.uiKit,
@@ -305,6 +386,7 @@ export async function runSpecPipeline(input: {
     provider: llmProvider,
     theme: input.theme,
     model: input.model,
+    blueprint: input.blueprint,
   });
 
   const enriched = await enrichSpecWithImages(spec);

@@ -30,6 +30,35 @@ import type {
   ValidationIssue,
 } from "./types";
 
+/**
+ * Deterministic design score (0–100). Errors hurt more than warnings;
+ * having design tokens, SEO, and a full section set earns back points.
+ */
+export function computeDesignScore(
+  spec: SiteSpec,
+  issues: ValidationIssue[],
+): number {
+  let score = 100;
+  for (const issue of issues) {
+    score -= issue.severity === "error" ? 12 : 4;
+  }
+
+  if (spec.design && Object.keys(spec.design).length >= 2) score += 4;
+  if (spec.seo?.title && spec.seo?.description) score += 4;
+  else score -= 6;
+
+  const sectionCount = spec.pages.reduce((n, p) => n + p.sections.length, 0);
+  if (sectionCount >= 6) score += 3;
+  if (sectionCount < 5) score -= 10;
+
+  const hasHero = spec.pages.some((p) =>
+    p.sections.some((s) => s.id.startsWith("hero_")),
+  );
+  if (!hasHero) score -= 15;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
 /** Phrases that mark copy as generic filler rather than real business writing. */
 const BANNED_PHRASES = [
   "lorem ipsum",
@@ -359,7 +388,12 @@ export async function reviewSpec(input: {
   record("schema", schemaIssues);
 
   if (schemaIssues.length > 0) {
-    return { passed: false, issues, checks };
+    return {
+      passed: false,
+      score: computeDesignScore(input.spec as SiteSpec, issues),
+      issues,
+      checks,
+    };
   }
 
   record("structure", checkStructure(input.spec));
@@ -375,8 +409,16 @@ export async function reviewSpec(input: {
     record("render", rendered.issues);
   }
 
+  const score = computeDesignScore(input.spec, issues);
+  checks.push({
+    name: "design_score",
+    passed: score >= 70,
+    detail: `${score}/100`,
+  });
+
   return {
     passed: issues.every((i) => i.severity !== "error"),
+    score,
     issues,
     checks,
     html,

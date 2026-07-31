@@ -9,7 +9,9 @@
 import type { DesignTokens } from "@/lib/spec/schema";
 
 export const AGENT_ROLES = [
+  "manager",
   "planner",
+  "designer",
   "developer",
   "reviewer",
   "fixer",
@@ -19,7 +21,9 @@ export const AGENT_ROLES = [
 export type AgentRole = (typeof AGENT_ROLES)[number];
 
 export const AGENT_ROLE_LABELS: Record<AgentRole, string> = {
+  manager: "Manager",
   planner: "Planner",
+  designer: "Designer",
   developer: "Developer",
   reviewer: "Reviewer",
   fixer: "Fix agent",
@@ -68,11 +72,16 @@ export type ReviewCheck = {
 
 export type ReviewReport = {
   passed: boolean;
+  /** Design / quality score 0–100 (deterministic rubric). */
+  score: number;
   issues: ValidationIssue[];
   checks: ReviewCheck[];
   /** Populated by the render smoke test so callers can reuse the output. */
   html?: string;
 };
+
+/** Fixer runs when review fails OR score falls below this threshold. */
+export const DESIGN_SCORE_THRESHOLD = 70;
 
 export type TargetProperty =
   | "color"
@@ -80,7 +89,9 @@ export type TargetProperty =
   | "image"
   | "radius"
   | "font"
-  | "layout";
+  | "layout"
+  | "size"
+  | "structure";
 
 /** Where in the site a request resolves to. */
 export type ResolvedTarget =
@@ -105,6 +116,12 @@ export type ResolvedTarget =
       label: string;
     }
   | { kind: "section"; sectionKey: string; label: string }
+  | {
+      kind: "add_section";
+      sectionId: string;
+      pageSlug: string;
+      label: string;
+    }
   | { kind: "site"; label: string };
 
 export type TargetResolution = {
@@ -125,11 +142,19 @@ export type AgentPlan = {
   steps: string[];
   confidence: TargetResolution["confidence"];
   source: "deterministic" | "llm";
+  /** Industry inferred from the KB during generate planning. */
+  industry?: string;
+  /** Template ids the planner/retriever selected. */
+  templateIds?: string[];
 };
 
 export const AGENT_BUDGET = {
   /** Review passes after the first one. 2 → at most 3 reviews per run. */
   maxFixAttempts: 2,
-  /** Hard ceiling on model calls per run so a bad request cannot drain the free tier. */
-  maxLlmCalls: 8,
+  /**
+   * Hard ceiling on agent-layer model calls (planner/designer/fixer/judge).
+   * Spec pipeline plan/structure/content calls are separate and already
+   * shortened when a blueprint supplies theme + sections.
+   */
+  maxLlmCalls: 6,
 } as const;

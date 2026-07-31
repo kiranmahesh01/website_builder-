@@ -16,7 +16,7 @@ import {
 } from "@/lib/spec/schema";
 import { resolveSpecTokens } from "@/lib/themes/layout";
 import type { SiteThemeName } from "@/lib/themes";
-import { extractColor } from "./colors";
+import { extractColor, shade } from "./colors";
 import type { ResolvedTarget, TargetProperty, TargetResolution } from "./types";
 
 export type ComponentKind = "button" | "heading" | "text" | "image" | "list";
@@ -219,11 +219,22 @@ const COMPONENT_NOUNS: { pattern: RegExp; kind: ComponentKind }[] = [
 ];
 
 const PROPERTY_PATTERNS: { pattern: RegExp; property: TargetProperty }[] = [
-  { pattern: /\b(colou?r|background|bg|shade|tint)\b/, property: "color" },
+  { pattern: /\b(colou?r|background|bg|shade|tint|darker|lighter)\b/, property: "color" },
   { pattern: /\b(rounded|radius|corners|square|pill)\b/, property: "radius" },
   { pattern: /\b(font|typeface|typography)\b/, property: "font" },
   { pattern: /\b(image|photo|picture)\b/, property: "image" },
   { pattern: /\b(reorder|move|order|position|layout)\b/, property: "layout" },
+  { pattern: /\b(bigger|larger|smaller|size)\b/, property: "size" },
+  { pattern: /\b(add|insert|include)\b.+\b(section|pricing|faq|blog|testimonial)/, property: "structure" },
+];
+
+const ADDABLE_ALIASES: { pattern: RegExp; sectionId: string }[] = [
+  { pattern: /\b(pricing|price|plans|tiers)\b/, sectionId: "pricing_3tier" },
+  { pattern: /\b(faq|questions)\b/, sectionId: "faq_accordion" },
+  { pattern: /\b(blog|journal|articles|posts)\b/, sectionId: "blog_teasers" },
+  { pattern: /\b(testimonial|review|quote)\b/, sectionId: "testimonial_single" },
+  { pattern: /\b(logos?|clients?|partners?)\b/, sectionId: "logos_strip" },
+  { pattern: /\b(cta|call to action)\b/, sectionId: "cta_band" },
 ];
 
 function detectSections(
@@ -289,6 +300,125 @@ export function resolveTargets(
   const kind = detectComponentKind(request);
   const sections = detectSections(memory, request);
   const targets: ResolvedTarget[] = [];
+  const lower = request.toLowerCase();
+
+  // "add pricing" / "add a blog section" → structural patch
+  if (
+    /\b(add|insert|include|put)\b/.test(lower) &&
+    (property === "structure" ||
+      ADDABLE_ALIASES.some((a) => a.pattern.test(lower)))
+  ) {
+    for (const alias of ADDABLE_ALIASES) {
+      if (!alias.pattern.test(lower)) continue;
+      const exists = allSections(memory).some((s) => s.type === alias.sectionId);
+      if (exists) continue;
+      const pageSlug = memory.pages[0]?.slug || "home";
+      targets.push({
+        kind: "add_section",
+        sectionId: alias.sectionId,
+        pageSlug,
+        label: `add ${alias.sectionId}`,
+      });
+    }
+    if (targets.length > 0) {
+      return {
+        targets,
+        confidence: "high",
+        property: "structure",
+        reason: `Add section request: ${targets.map((t) => t.label).join(", ")}`,
+      };
+    }
+  }
+
+  // "make the button bigger/smaller"
+  if (
+    (property === "size" || /\b(bigger|larger|smaller|huge)\b/.test(lower)) &&
+    (kind === "button" || /\bbutton\b/.test(lower) || /\bcta\b/.test(lower))
+  ) {
+    const size = /\b(smaller|tiny|compact)\b/.test(lower)
+      ? "small"
+      : /\b(bigger|larger|huge|large)\b/.test(lower)
+        ? "large"
+        : "medium";
+    if (sections.length > 0) {
+      for (const section of sections) {
+        targets.push({
+          kind: "section_token",
+          sectionKey: section.key,
+          token: "buttonSize",
+          value: size,
+          label: `${section.type} buttonSize`,
+        });
+      }
+    } else {
+      targets.push({
+        kind: "design_token",
+        token: "buttonSize",
+        value: size,
+        label: "site buttonSize",
+      });
+    }
+    return {
+      targets,
+      confidence: "high",
+      property: "size",
+      reason: `Button size request mapped to buttonSize=${size}`,
+    };
+  }
+
+  // "make this section darker" without a named colour
+  if (
+    /\b(darker|darken|more dark)\b/.test(lower) &&
+    sections.length > 0 &&
+    !color
+  ) {
+    for (const section of sections) {
+      const current =
+        section.tokens?.surface ||
+        memory.design.surface ||
+        memory.effectiveTokens.surface ||
+        "#FFFFFF";
+      const next = shade(current, -0.25);
+      targets.push({
+        kind: "section_token",
+        sectionKey: section.key,
+        token: "surface",
+        value: next,
+        label: `${section.type} surface`,
+      });
+    }
+    return {
+      targets,
+      confidence: "high",
+      property: "color",
+      color: targets[0] && "value" in targets[0] ? targets[0].value : undefined,
+      reason: `Darken request scoped to ${sections.map((s) => s.key).join(", ")}`,
+    };
+  }
+
+  if (/\b(lighter|lighten|brighter)\b/.test(lower) && sections.length > 0 && !color) {
+    for (const section of sections) {
+      const current =
+        section.tokens?.surface ||
+        memory.design.surface ||
+        memory.effectiveTokens.surface ||
+        "#111111";
+      const next = shade(current, 0.25);
+      targets.push({
+        kind: "section_token",
+        sectionKey: section.key,
+        token: "surface",
+        value: next,
+        label: `${section.type} surface`,
+      });
+    }
+    return {
+      targets,
+      confidence: "high",
+      property: "color",
+      reason: `Lighten request scoped to ${sections.map((s) => s.key).join(", ")}`,
+    };
+  }
 
   const colorProperty = property === "color" || (color !== null && kind !== null);
 

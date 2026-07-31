@@ -9,7 +9,14 @@
 import { z } from "zod";
 import { SECTION_BY_ID } from "@/lib/sections/registry";
 import { runSpecPipeline } from "@/lib/spec/pipeline";
-import { withSectionKeys, type SiteSpec } from "@/lib/spec/schema";
+import { demoContentForSection } from "@/lib/spec/demo-spec";
+import {
+  SectionIdSchema,
+  withSectionKeys,
+  type SectionId,
+  type SiteSpec,
+} from "@/lib/spec/schema";
+import { blueprintDigest, type WebsiteBlueprint } from "./designer";
 import { agentJson, isOffline, type AgentLlmContext } from "./llm";
 import { allSections, memoryDigest, type ProjectMemoryModel } from "./memory";
 import { PatchOpSchema, applyPatch, type PatchOp } from "./patch";
@@ -47,6 +54,16 @@ function opsFromTargets(targets: ResolvedTarget[]): PatchOp[] {
         token: target.token,
         value: target.value,
       });
+    }
+    if (target.kind === "add_section") {
+      const parsed = SectionIdSchema.safeParse(target.sectionId);
+      if (parsed.success) {
+        ops.push({
+          op: "add_section",
+          pageSlug: target.pageSlug,
+          sectionId: parsed.data as SectionId,
+        });
+      }
     }
   }
   return ops;
@@ -160,6 +177,19 @@ Rules:
 - Return ONLY valid JSON.`;
 }
 
+function opsFromTargetsWithContent(
+  targets: ResolvedTarget[],
+  brand: string,
+): PatchOp[] {
+  return opsFromTargets(targets).map((op) => {
+    if (op.op !== "add_section" || op.content) return op;
+    return {
+      ...op,
+      content: demoContentForSection(op.sectionId, brand, brand),
+    };
+  });
+}
+
 export async function runDeveloperPatch(input: {
   request: string;
   spec: SiteSpec;
@@ -167,7 +197,10 @@ export async function runDeveloperPatch(input: {
   plan: AgentPlan;
   ctx: AgentLlmContext;
 }): Promise<DeveloperResult> {
-  const deterministic = opsFromTargets(input.plan.targets);
+  const deterministic = opsFromTargetsWithContent(
+    input.plan.targets,
+    input.memory.brand,
+  );
 
   if (deterministic.length > 0) {
     const result = applyPatch(input.spec, deterministic);
@@ -232,7 +265,22 @@ export async function runDeveloperGenerate(input: {
   theme?: string | null;
   uiKit?: string | null;
   model?: string | null;
+  blueprint?: WebsiteBlueprint | null;
 }): Promise<SiteSpec> {
-  const result = await runSpecPipeline(input);
+  const result = await runSpecPipeline({
+    prompt: input.prompt,
+    provider: input.provider,
+    theme: input.theme || input.blueprint?.theme || null,
+    uiKit: input.uiKit,
+    model: input.model,
+    blueprint: input.blueprint
+      ? {
+          theme: input.blueprint.theme,
+          sections: input.blueprint.sections,
+          design: input.blueprint.design,
+          digest: blueprintDigest(input.blueprint),
+        }
+      : null,
+  });
   return withSectionKeys(result.spec);
 }

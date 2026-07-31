@@ -1,12 +1,18 @@
 /**
- * Planner agent — decomposes a user request against project memory.
+ * Planner agent — decomposes a user request against project memory (refine)
+ * or against the template KB (generate).
  *
- * It always produces a deterministic plan first by resolving the request
- * against the memory index. The model is only consulted when that resolution is
- * ambiguous, which keeps confident requests ("make the buttons blue") free.
+ * It always produces a deterministic plan first. The model is only consulted
+ * when that resolution is ambiguous, which keeps confident requests free.
  */
 
 import { z } from "zod";
+import {
+  formatTemplatesForPrompt,
+  retrieveTemplates,
+  type RetrievedTemplates,
+} from "@/lib/knowledge";
+import { parseBrief } from "@/lib/brief-parser";
 import { DesignTokensSchema, type DesignTokens } from "@/lib/spec/schema";
 import { agentJson, isOffline, type AgentLlmContext } from "./llm";
 import {
@@ -172,6 +178,103 @@ export async function runPlanner(input: {
     steps: parsed.data.steps.length > 0 ? parsed.data.steps : fallback.steps,
     confidence: targets.length > 0 ? "medium" : resolution.confidence,
     source: "llm",
+  };
+}
+
+/**
+ * Generate-mode planner: reads the brief + KB templates and outlines the build
+ * before the designer emits a blueprint. Deterministic when retrieval is strong.
+ */
+export function planFromBrief(
+  request: string,
+  retrieved: RetrievedTemplates = retrieveTemplates(request),
+): AgentPlan {
+  const brief = parseBrief(request);
+  const top = retrieved.matches[0]?.template;
+  const brand = brief.brandHint || "the business";
+  const industry = retrieved.industry;
+
+  const steps = [
+    top
+      ? `Match industry template "${top.id}" (${retrieved.confidence} confidence)`
+      : "No strong industry template — designer will use a general layout",
+    `Set visual direction for a ${industry} site`,
+    "Generate pages and section copy from the blueprint",
+    "Review structure, slots, and render quality",
+  ];
+
+  return {
+    intent: "regenerate",
+    summary: top
+      ? `Build a ${industry} site for ${brand} using the ${top.id} template`
+      : `Build a site for ${brand} from the brief`,
+    targets: [{ kind: "site", label: "entire site" }],
+    steps,
+    confidence: retrieved.confidence,
+    source: "deterministic",
+    industry,
+    templateIds: retrieved.matches.map((m) => m.template.id),
+  };
+}
+
+export async function runGeneratePlanner(input: {
+  request: string;
+  retrieved?: RetrievedTemplates;
+  ctx: AgentLlmContext;
+}): Promise<AgentPlan> {
+  const retrieved = input.retrieved ?? retrieveTemplates(input.request);
+  const fallback = planFromBrief(input.request, retrieved);
+
+  if (
+    retrieved.confidence === "high" ||
+    retrieved.confidence === "medium" ||
+    isOffline(input.ctx)
+  ) {
+    return fallback;
+  }
+
+  const json = await agentJson(
+    input.ctx,
+    [
+      {
+        role: "system",
+        content: `You are the PLANNER agent for Magic AI's website builder. Output STRICT JSON only.
+
+You outline HOW to build a new site from a brief. You do not write copy or pick hex colours.
+
+Industry templates:
+${formatTemplatesForPrompt(retrieved)}
+
+Output shape:
+{
+  "intent": "regenerate",
+  "summary": "One sentence build plan",
+  "steps": ["Short imperative step", "..."],
+  "targets": []
+}
+
+Rules:
+- intent must be "regenerate".
+- Reference the best-matching template when one exists.
+- Return ONLY valid JSON.`,
+      },
+      { role: "user", content: `Business brief:\n${input.request}` },
+    ],
+    500,
+  );
+
+  const parsed = json ? PlanResponseSchema.safeParse(json) : null;
+  if (!parsed?.success) return fallback;
+
+  return {
+    intent: "regenerate",
+    summary: parsed.data.summary || fallback.summary,
+    targets: [{ kind: "site", label: "entire site" }],
+    steps: parsed.data.steps.length > 0 ? parsed.data.steps : fallback.steps,
+    confidence: "medium",
+    source: "llm",
+    industry: fallback.industry,
+    templateIds: fallback.templateIds,
   };
 }
 

@@ -98,11 +98,13 @@ export function SpecButton({
   type?: "submit" | "button";
 }) {
   const layout = getThemeLayout(theme);
+  const defaultPad =
+    layout.buttonStyle === "pill" ? "0.9rem 1.75rem" : "0.85rem 1.35rem";
   const base = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: layout.buttonStyle === "pill" ? "0.9rem 1.75rem" : "0.85rem 1.35rem",
+    padding: `var(--button-pad, ${defaultPad})`,
     fontWeight: 600,
     textDecoration: "none",
     letterSpacing: layout.letterSpacing,
@@ -114,6 +116,7 @@ export function SpecButton({
           : "var(--radius)",
     cursor: "pointer",
     font: "inherit",
+    fontSize: "var(--button-font-size, inherit)",
   } as const;
 
   const outlineStyle = {

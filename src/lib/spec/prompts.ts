@@ -23,7 +23,7 @@ const THEME_LIST = SITE_THEMES.map(
 
 export const PLAN_SYSTEM_PROMPT = `You are Magic AI's site planner. Output STRICT JSON only.
 
-Pick a theme and outline pages from the user's business brief.
+Pick a theme and outline pages from the user's business brief. When a design blueprint is provided in the user message, prefer its theme and industry cues.
 
 Themes (pick exactly one):
 ${THEME_LIST}
@@ -99,6 +99,7 @@ Output shape:
 Rules:
 - Respect word limits strictly — short, specific copy beats long generic prose.
 - NEVER use: "welcome to our website", "cutting-edge solutions", "your trusted partner", "transform your business".
+- If a design blueprint is provided, follow its tone rules, avoid its dontRules, and prefer its headline patterns.
 - headlines must name the real offer (e.g. "Single-origin pour-overs in Portland" not "Our features").
 - features_3col items: array of { "title": string, "body": string } with exactly 3 items.
 - pricing_3tier plans: array of { "name", "price", "period", "features": string[], "highlighted": boolean } — middle plan highlighted.

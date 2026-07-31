@@ -152,6 +152,16 @@ export const SECTION_REGISTRY: SectionMeta[] = [
     },
   },
   {
+    id: "blog_teasers",
+    purpose: "Three article or resource teasers with title and summary",
+    goodFor: ["saas", "agency", "portfolio", "content", "local"],
+    position: "body",
+    slots: {
+      headline: { type: "text", maxWords: 6 },
+      items: { type: "list", minItems: 3, maxItems: 3 },
+    },
+  },
+  {
     id: "footer_simple",
     purpose: "Logo, three link columns, copyright",
     goodFor: ["saas", "local", "portfolio", "product", "service"],

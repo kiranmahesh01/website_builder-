@@ -72,7 +72,8 @@ function rgbToHex(r: number, g: number, b: number): string {
     .join("")}`.toUpperCase();
 }
 
-function shade(hex: string, amount: number): string {
+/** Lighten (amount > 0) or darken (amount < 0) a hex colour. */
+export function shade(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
   if (amount >= 0) {
     return rgbToHex(

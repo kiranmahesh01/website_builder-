@@ -39,6 +39,8 @@ export const HexColorSchema = z
 
 export const RadiusSchema = z.enum(["none", "small", "medium", "large"]);
 
+export const ButtonSizeSchema = z.enum(["small", "medium", "large"]);
+
 /** Fonts we already load from Google Fonts for the built-in themes. */
 export const SPEC_FONTS = [
   "Archivo",
@@ -65,6 +67,7 @@ export const DesignTokensSchema = z.object({
   muted: HexColorSchema.optional(),
   buttonBg: HexColorSchema.optional(),
   buttonText: HexColorSchema.optional(),
+  buttonSize: ButtonSizeSchema.optional(),
   radius: RadiusSchema.optional(),
   displayFont: SpecFontSchema.optional(),
   bodyFont: SpecFontSchema.optional(),

@@ -41,6 +41,13 @@ function jsonResponse(body: unknown, status: number) {
  * Streams the agent loop as newline-delimited JSON so the builder can show
  * which agent is running and whether validation is retrying.
  *
+ * Scoped edits resolve via project memory + deterministic patches
+ * ("make this button bigger", "darker hero", "add pricing") before any model call.
+ *
+ * Vision / screenshot targeting is optional: when OPENROUTER_API_KEY is set and
+ * a vision-capable model is selected, a future client can attach an image; the
+ * default path does not require vision keys and never blocks on them.
+ *
  * Auth and the project read happen before the stream opens; everything after
  * that is streamed, including failures, so the client always sees a terminal
  * chunk.

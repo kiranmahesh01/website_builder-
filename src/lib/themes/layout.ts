@@ -58,6 +58,21 @@ function radiusToPx(radius: string | undefined): string {
   }
 }
 
+function buttonSizeVars(
+  size: DesignTokens["buttonSize"] | undefined,
+): { pad?: string; fontSize?: string } {
+  switch (size) {
+    case "small":
+      return { pad: "0.5rem 0.95rem", fontSize: "0.875rem" };
+    case "large":
+      return { pad: "1.15rem 2.1rem", fontSize: "1.0625rem" };
+    case "medium":
+      return { pad: "0.85rem 1.35rem", fontSize: "1rem" };
+    default:
+      return {};
+  }
+}
+
 /** Theme preset merged with the project's design token overrides. */
 export function resolveSpecTokens(
   theme: SiteThemeName,
@@ -76,6 +91,7 @@ export function resolveSpecTokens(
     radius: overrides?.radius || base.radius,
     buttonBg: overrides?.buttonBg,
     buttonText: overrides?.buttonText,
+    buttonSize: overrides?.buttonSize,
   };
 }
 
@@ -84,6 +100,7 @@ export function specThemeVars(
   overrides?: DesignTokens,
 ): CSSProperties {
   const t = resolveSpecTokens(theme, overrides);
+  const btn = buttonSizeVars(t.buttonSize);
   return {
     "--primary": t.primary,
     "--accent": t.accent,
@@ -93,6 +110,8 @@ export function specThemeVars(
     "--muted": t.muted,
     ...(t.buttonBg ? { "--button-bg": t.buttonBg } : {}),
     ...(t.buttonText ? { "--button-text": t.buttonText } : {}),
+    ...(btn.pad ? { "--button-pad": btn.pad } : {}),
+    ...(btn.fontSize ? { "--button-font-size": btn.fontSize } : {}),
     "--display": `"${t.displayFont}", Georgia, serif`,
     "--body": `"${t.bodyFont}", system-ui, sans-serif`,
     "--radius": radiusToPx(t.radius),
@@ -116,6 +135,9 @@ export function sectionTokenVars(
   if (overrides.muted) vars["--muted"] = overrides.muted;
   if (overrides.buttonBg) vars["--button-bg"] = overrides.buttonBg;
   if (overrides.buttonText) vars["--button-text"] = overrides.buttonText;
+  const btn = buttonSizeVars(overrides.buttonSize);
+  if (btn.pad) vars["--button-pad"] = btn.pad;
+  if (btn.fontSize) vars["--button-font-size"] = btn.fontSize;
   if (overrides.radius) vars["--radius"] = radiusToPx(overrides.radius);
   if (overrides.displayFont) {
     vars["--display"] = `"${overrides.displayFont}", Georgia, serif`;

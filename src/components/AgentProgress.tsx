@@ -3,7 +3,7 @@
 import { AGENT_ROLE_LABELS, type AgentEvent } from "@/lib/agents/types";
 
 /**
- * Live trace of the planner → developer → reviewer → fix loop.
+ * Live trace of the manager → planner → designer → developer → reviewer → fix loop.
  *
  * Imports only from `@/lib/agents/types`, which is types and plain constants,
  * so nothing server-only crosses the client boundary.
@@ -39,6 +39,14 @@ export function AgentProgress({
   if (events.length === 0) return null;
 
   const latest = events[events.length - 1];
+  const scoreEvent = [...events]
+    .reverse()
+    .find(
+      (e) =>
+        e.role === "reviewer" && /score\s+\d+\/100/i.test(e.message),
+    );
+  const scoreMatch = scoreEvent?.message.match(/score\s+(\d+)\/100/i);
+  const designScore = scoreMatch ? Number(scoreMatch[1]) : null;
 
   return (
     <div className="rounded-2xl border border-[var(--line)] bg-ink-soft/60 p-3">
@@ -46,11 +54,22 @@ export function AgentProgress({
         <p className="text-[10px] uppercase tracking-[0.18em] text-mist">
           Agents
         </p>
-        {busy ? (
-          <span className="animate-pulse text-[10px] text-lime">
-            {AGENT_ROLE_LABELS[latest.role]} working…
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {designScore !== null ? (
+            <span
+              className={`text-[10px] tabular-nums ${
+                designScore >= 70 ? "text-lime" : "text-coral"
+              }`}
+            >
+              Design {designScore}/100
+            </span>
+          ) : null}
+          {busy ? (
+            <span className="animate-pulse text-[10px] text-lime">
+              {AGENT_ROLE_LABELS[latest.role]} working…
+            </span>
+          ) : null}
+        </div>
       </div>
       <ul className="mt-2 space-y-1.5">
         {events.map((event, i) => (

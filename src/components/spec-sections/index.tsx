@@ -411,6 +411,63 @@ export function CtaBand({ content, theme, tokens }: SectionProps) {
   );
 }
 
+export function BlogTeasers({ content, theme, tokens }: SectionProps) {
+  const items = Array.isArray(content.items) ? content.items : [];
+  return (
+    <SpecSection theme={theme} id="journal" tokens={tokens}>
+      <SpecWrap>
+        <SpecHeading theme={theme}>
+          {str(content.headline, "From the journal")}
+        </SpecHeading>
+        <div
+          style={{
+            marginTop: "2.5rem",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "1.25rem",
+          }}
+        >
+          {items.slice(0, 3).map((item, i) => {
+            const o = item as Record<string, unknown>;
+            return (
+              <article
+                key={i}
+                style={{
+                  padding: "1.5rem",
+                  borderRadius: "var(--radius)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--text) 10%, transparent)",
+                  background: "var(--surface-alt)",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: "0 0 0.5rem",
+                    fontFamily: "var(--display)",
+                    fontSize: "1.15rem",
+                  }}
+                >
+                  {str(o.title, "Article")}
+                </h3>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "var(--muted)",
+                    fontSize: "0.95rem",
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {str(o.body)}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+      </SpecWrap>
+    </SpecSection>
+  );
+}
+
 export function FooterSimple({ content, brand, theme, tokens }: SectionProps) {
   return (
     <footer
@@ -469,5 +526,6 @@ export const SPEC_SECTION_COMPONENTS: Record<
   about_text: AboutText,
   contact_form: ContactForm,
   cta_band: CtaBand,
+  blog_teasers: BlogTeasers,
   footer_simple: FooterSimple,
 };

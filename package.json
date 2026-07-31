@@ -11,8 +11,10 @@
     "db:studio": "prisma studio",
     "eval:spec": "npx tsx scripts/eval-spec.ts",
     "eval:agents": "npx tsx scripts/eval-agents.ts",
+    "templates:build": "npx tsx scripts/build-templates.ts",
     "probe:nvidia": "npx tsx scripts/probe-nvidia.ts",
     "smoke:pipeline": "npx tsx scripts/smoke-nvidia-pipeline.ts",
+    "smoke:agents": "npx tsx scripts/smoke-agent-loop.ts",
     "tunnel": "node scripts/tunnel.mjs",
     "postinstall": "prisma generate"
   },
