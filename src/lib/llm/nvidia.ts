@@ -14,6 +14,33 @@ function buildClient(apiKey: string) {
 }
 
 /**
+ * Optional per-model key overrides so different NIM keys can be used for
+ * DeepSeek / GPT-OSS / Ultra. Falls back to NVIDIA_API_KEY for everything else.
+ */
+export function resolveNvidiaApiKey(model: string): string {
+  const fallback = process.env.NVIDIA_API_KEY?.trim();
+  const id = model.toLowerCase();
+
+  let key: string | undefined;
+  if (id.includes("deepseek")) {
+    key = process.env.NVIDIA_API_KEY_DEEPSEEK?.trim() || fallback;
+  } else if (id.includes("gpt-oss")) {
+    key = process.env.NVIDIA_API_KEY_GPT_OSS?.trim() || fallback;
+  } else if (id.includes("nemotron") && id.includes("ultra")) {
+    key = process.env.NVIDIA_API_KEY_ULTRA?.trim() || fallback;
+  } else {
+    key = fallback;
+  }
+
+  if (!key) {
+    throw new Error(
+      "NVIDIA_API_KEY is not set. Get a free key at https://build.nvidia.com and set NVIDIA_API_KEY.",
+    );
+  }
+  return key;
+}
+
+/**
  * Reasoning models on NIM usually return their chain of thought in a separate
  * `reasoning_content` field, but some inline it into the content as a <think>
  * block. Strip it so the JSON extractor only sees the answer.
@@ -163,16 +190,23 @@ export async function generateWithNvidia(
   messages: ChatMessage[],
   options?: { model?: string; json?: boolean; maxTokens?: number },
 ): Promise<string> {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) throw new Error("NVIDIA_API_KEY is not set");
+  if (!process.env.NVIDIA_API_KEY?.trim()) {
+    throw new Error("NVIDIA_API_KEY is not set");
+  }
 
-  const client = buildClient(apiKey);
   const maxTokens = options?.maxTokens ?? 6500;
   const chain = nvidiaModelChain(options?.model);
   const errors: string[] = [];
   const expectJson = options?.json === true;
+  const clients = new Map<string, OpenAI>();
 
   for (const model of chain) {
+    const apiKey = resolveNvidiaApiKey(model);
+    let client = clients.get(apiKey);
+    if (!client) {
+      client = buildClient(apiKey);
+      clients.set(apiKey, client);
+    }
     const useJsonFormat = expectJson && nvidiaSupportsJsonObject(model);
     try {
       return await callModel(client, model, messages, {
