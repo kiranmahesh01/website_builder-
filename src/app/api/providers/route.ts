@@ -24,7 +24,8 @@ export async function GET() {
           ...option,
           id: nvidiaDefault,
           label: "Auto (NVIDIA)",
-          role: "Default — NVIDIA NIM primary + fallbacks",
+          // Keep catalog role (DeepSeek Flash → 120B → Ultra).
+          role: option.role,
         }
       : option,
   ).filter(
