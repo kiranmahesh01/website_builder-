@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AgentProgress } from "@/components/AgentProgress";
 import { PreviewShowcase } from "@/components/PreviewShowcase";
 import { VisualEditor } from "@/components/VisualEditor";
+import type { AgentEvent } from "@/lib/agents/types";
 import {
   BRIEF_EXAMPLE_CHIP,
   composeBrief,
@@ -20,11 +22,18 @@ import {
   DEFAULT_OPENROUTER_MODEL,
   OPENROUTER_MODEL_OPTIONS,
 } from "@/lib/llm/openrouter-models";
+import { DEFAULT_NVIDIA_MODEL } from "@/lib/llm/nvidia-models";
 
 type Message = {
   id?: string;
   role: string;
   content: string;
+};
+
+type ModelOption = {
+  id: string;
+  label: string;
+  role: string;
 };
 
 type ProjectState = {
@@ -67,17 +76,31 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [siteTheme, setSiteTheme] = useState<SiteThemeName>(DEFAULT_SITE_THEME);
-  const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL);
+  const [llmProvider, setLlmProvider] = useState("openrouter");
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_OPENROUTER_MODEL);
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([
+    ...OPENROUTER_MODEL_OPTIONS,
+  ]);
+  const [llmReady, setLlmReady] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
+  const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
 
   const composedBrief = useMemo(() => composeBrief(brief), [brief]);
   const previewSrcDoc = useMemo(() => project?.html || "", [project?.html]);
+  const selectedModelRole = useMemo(
+    () =>
+      modelOptions.find((m) => m.id === selectedModel)?.role ||
+      (llmProvider === "nvidia"
+        ? "NVIDIA NIM models"
+        : "OpenRouter free models"),
+    [modelOptions, selectedModel, llmProvider],
+  );
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, busy]);
+  }, [messages, busy, agentEvents]);
 
   useEffect(() => {
     if (initialPrompt.trim()) {
@@ -94,6 +117,39 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           setBootError("Could not connect to generation. Try again in a moment.");
           return;
         }
+        const providersData = (await providersRes.json()) as {
+          defaults?: { provider?: string; model?: string };
+          openrouterOptions?: ModelOption[];
+          nvidiaOptions?: ModelOption[];
+        };
+        const provider = providersData.defaults?.provider || "openrouter";
+        const defaultModel =
+          providersData.defaults?.model ||
+          (provider === "nvidia" ? DEFAULT_NVIDIA_MODEL : DEFAULT_OPENROUTER_MODEL);
+        setLlmProvider(provider);
+        if (provider === "nvidia") {
+          const options =
+            providersData.nvidiaOptions && providersData.nvidiaOptions.length > 0
+              ? providersData.nvidiaOptions
+              : [
+                  {
+                    id: defaultModel,
+                    label: "Auto (NVIDIA)",
+                    role: "Default — NVIDIA NIM primary + fallbacks",
+                  },
+                ];
+          setModelOptions(options);
+          setSelectedModel(defaultModel);
+        } else {
+          setModelOptions(
+            providersData.openrouterOptions &&
+              providersData.openrouterOptions.length > 0
+              ? providersData.openrouterOptions
+              : [...OPENROUTER_MODEL_OPTIONS],
+          );
+          setSelectedModel(defaultModel);
+        }
+        setLlmReady(true);
 
         if (projectId) {
           const res = await fetch(`/api/projects/${projectId}`);
@@ -122,7 +178,9 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   }, [projectId, router]);
 
   useEffect(() => {
-    if (projectId || !initialPrompt.trim() || autoStarted.current) return;
+    if (!llmReady || projectId || !initialPrompt.trim() || autoStarted.current) {
+      return;
+    }
     const t = setTimeout(() => {
       if (!autoStarted.current && initialPrompt.trim()) {
         autoStarted.current = true;
@@ -131,7 +189,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt, projectId]);
+  }, [initialPrompt, projectId, llmReady, llmProvider, selectedModel]);
 
   async function ensureAuth(callback: string): Promise<boolean> {
     const sessionProbe = await fetch("/api/projects");
@@ -156,6 +214,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
 
     setBusy(true);
     setError("");
+    setAgentEvents([]);
     setStatus("Building your site from your brief…");
     setMessages((prev) => [
       ...prev,
@@ -173,7 +232,8 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           prompt: value,
           projectId: project?.id,
           theme,
-          model: openRouterModel,
+          provider: llmProvider,
+          model: selectedModel,
         }),
         signal: controller.signal,
       });
@@ -245,6 +305,96 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     setError("");
   }
 
+  /**
+   * Streams the agent loop so the user sees each agent as it runs.
+   * Returns false when the endpoint is unavailable, so the caller can fall back
+   * to the non-streaming route.
+   */
+  async function refineStreaming(projectId: string, value: string) {
+    const res = await fetch("/api/agent/refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        message: value,
+        provider: llmProvider,
+        model: selectedModel,
+      }),
+    });
+
+    const isStream = (res.headers.get("content-type") || "").includes("ndjson");
+    if (!res.ok || !res.body || !isStream) return false;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let handled = false;
+
+    const consume = (line: string) => {
+      if (!line.trim()) return;
+      let chunk: {
+        type?: string;
+        event?: AgentEvent;
+        project?: ProjectState;
+        messages?: Message[];
+        error?: string;
+      };
+      try {
+        chunk = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (chunk.type === "event" && chunk.event) {
+        const event = chunk.event;
+        setAgentEvents((prev) => [...prev, event]);
+        setStatus(event.message);
+        return;
+      }
+      if (chunk.type === "result" && chunk.project) {
+        setProject(chunk.project);
+        setMessages(chunk.messages || []);
+        handled = true;
+        return;
+      }
+      if (chunk.type === "error") {
+        setError(chunk.error || "Could not apply that change. Try rephrasing.");
+        handled = true;
+      }
+    };
+
+    for (;;) {
+      const { done, value: bytes } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(bytes, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      lines.forEach(consume);
+    }
+    consume(buffer);
+
+    return handled;
+  }
+
+  async function refineOnce(projectId: string, value: string) {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        message: value,
+        provider: llmProvider,
+        model: selectedModel,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Could not apply that change. Try rephrasing.");
+      return;
+    }
+    setProject(data.project);
+    setMessages(data.messages || []);
+  }
+
   async function onChat(e: FormEvent) {
     e.preventDefault();
     const value = chatInput.trim();
@@ -256,29 +406,17 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       return;
     }
 
+    const projectId = project.id;
     setBusy(true);
     setError("");
+    setAgentEvents([]);
     setStatus("Applying your changes…");
     setChatInput("");
     setMessages((prev) => [...prev, { role: "user", content: value }]);
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: project.id,
-          message: value,
-          model: openRouterModel,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Could not apply that change. Try rephrasing.");
-        return;
-      }
-      setProject(data.project);
-      setMessages(data.messages || []);
+      const streamed = await refineStreaming(projectId, value);
+      if (!streamed) await refineOnce(projectId, value);
     } catch {
       setError("Could not apply that change. Please try again.");
     } finally {
@@ -388,13 +526,17 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
-            value={openRouterModel}
-            onChange={(e) => setOpenRouterModel(e.target.value)}
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
             className="max-w-[14rem] rounded-full border border-[var(--line)] bg-ink-soft px-3 py-1.5 text-xs outline-none"
             disabled={busy}
-            title="OpenRouter free model — falls back automatically if one fails"
+            title={
+              llmProvider === "nvidia"
+                ? "NVIDIA NIM model — falls back automatically if one fails"
+                : "OpenRouter free model — falls back automatically if one fails"
+            }
           >
-            {OPENROUTER_MODEL_OPTIONS.map((m) => (
+            {modelOptions.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
@@ -491,10 +633,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
             <h1 className="mt-1 truncate font-[family-name:var(--font-display)] text-lg font-bold">
               {project?.title || "New website"}
             </h1>
-            <p className="mt-1 text-[11px] text-mist">
-              {OPENROUTER_MODEL_OPTIONS.find((m) => m.id === openRouterModel)?.role ||
-                "OpenRouter free models"}
-            </p>
+            <p className="mt-1 text-[11px] text-mist">{selectedModelRole}</p>
           </div>
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -558,6 +697,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
                 {m.content}
               </div>
             ))}
+            <AgentProgress events={agentEvents} busy={busy} />
             {status ? (
               <p className="animate-pulse text-xs text-lime">{status}</p>
             ) : null}

@@ -1,6 +1,7 @@
 import { generateWithBytez } from "./bytez";
 import { generateWebsiteData, refineWithDemo } from "./demo";
 import { generateWithGemini } from "./gemini";
+import { generateWithNvidia } from "./nvidia";
 import { generateWithOpenAI } from "./openai";
 import { generateWithOpenRouter } from "./openrouter";
 import { generateOpenRouterBestOf } from "./openrouter-best";
@@ -72,6 +73,12 @@ async function generateWithProvider(
   model?: string | null,
   options?: { maxTokens?: number },
 ): Promise<string> {
+  if (provider === "nvidia") {
+    return generateWithNvidia(messages, {
+      model: model || undefined,
+      maxTokens: options?.maxTokens,
+    });
+  }
   if (provider === "openai") {
     return generateWithOpenAI(messages, { model: model || undefined });
   }

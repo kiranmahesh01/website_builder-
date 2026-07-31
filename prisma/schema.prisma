@@ -9,14 +9,14 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
+  id           String            @id @default(cuid())
   name         String?
-  email        String    @unique
+  email        String            @unique
   passwordHash String
   image        String?
-  plan         String    @default("free")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  plan         String            @default("free")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   accounts     Account[]
   sessions     Session[]
   projects     Project[]
@@ -83,6 +83,99 @@ model Project {
   messages       Message[]
   versions       ProjectVersion[]
   leads          Lead[]
+  memory         ProjectMemory?
+  changes        ProjectChange[]
+}
+
+/// Structural model of a generated site: what exists, where, and how it is styled.
+/// Agents read this to ground a refinement instead of regenerating from scratch.
+model ProjectMemory {
+  id           String       @id @default(cuid())
+  brand        String
+  theme        String
+  /// JSON: DesignTokens overlay applied on top of the theme preset.
+  designTokens String?
+  /// JSON: compact site digest injected into agent prompts.
+  digest       String?
+  revision     Int          @default(1)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  projectId    String       @unique
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pages        MemoryPage[]
+}
+
+model MemoryPage {
+  id       String          @id @default(cuid())
+  slug     String
+  title    String
+  order    Int             @default(0)
+  memoryId String
+  memory   ProjectMemory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  sections MemorySection[]
+
+  @@unique([memoryId, slug])
+}
+
+model MemorySection {
+  id         String            @id @default(cuid())
+  /// Stable instance key, e.g. "home.hero_split#0".
+  key        String
+  /// Section type id from the section registry, e.g. "hero_split".
+  type       String
+  order      Int               @default(0)
+  /// JSON: DesignTokens overlay scoped to this section only.
+  tokens     String?
+  pageId     String
+  page       MemoryPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  components MemoryComponent[]
+
+  @@unique([pageId, key])
+}
+
+model MemoryComponent {
+  id              String        @id @default(cuid())
+  /// Stable key, e.g. "home.hero_split#0.ctaLabel".
+  key             String
+  /// Slot name inside the section, e.g. "ctaLabel".
+  slot            String
+  /// button | heading | text | image | list.
+  kind            String
+  /// Current value snapshot (text, image URL, or item summary).
+  value           String?
+  order           Int           @default(0)
+  memorySectionId String
+  section         MemorySection @relation(fields: [memorySectionId], references: [id], onDelete: Cascade)
+
+  @@unique([memorySectionId, key])
+}
+
+/// Append-only log of every agent run against a project.
+model ProjectChange {
+  id        String   @id @default(cuid())
+  /// generate | refine.
+  kind      String
+  request   String
+  summary   String
+  /// applied | no_op | failed.
+  status    String   @default("applied")
+  passed    Boolean  @default(true)
+  attempts  Int      @default(1)
+  /// JSON: planner output (intent, targets, steps).
+  plan      String?
+  /// JSON: patch operations the developer/fix agents applied.
+  patch     String?
+  /// JSON: reviewer issues remaining after the final pass.
+  issues    String?
+  /// JSON: ordered agent events for this run.
+  trace     String?
+  /// ProjectVersion snapshot taken before this change was applied.
+  versionId String?
+  createdAt DateTime @default(now())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model ProjectVersion {

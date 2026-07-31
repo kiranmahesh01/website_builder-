@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { runAgentLoop, type AgentRunResult } from "@/lib/agents";
+import { persistAgentRun } from "@/lib/agents/memory-store";
+import { requireUserId } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { availableProviders, generateWebsite } from "@/lib/llm";
-import {
-  DEFAULT_OPENROUTER_MODEL,
-  isAllowedOpenRouterModel,
-} from "@/lib/llm/openrouter-models";
-import { getDefaultProvider } from "@/lib/llm/types";
+import { resolveModel } from "@/lib/llm/resolve-model";
+import { resolveProvider } from "@/lib/llm/types";
+import { parseBrief, scoreBriefAdherence } from "@/lib/brief-parser";
 import { serializeProjectData, serializeSiteData } from "@/lib/site-data";
 import { assertCanCreateProject } from "@/lib/tier";
 import { titleFromPrompt } from "@/lib/utils";
@@ -18,7 +18,7 @@ export const maxDuration = 120;
 const schema = z.object({
   prompt: z.string().min(3).max(4000),
   provider: z
-    .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
+    .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
   model: z.string().max(120).optional(),
   projectId: z.string().optional(),
@@ -29,9 +29,9 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireUserId();
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
   const providers = availableProviders();
@@ -50,25 +50,49 @@ export async function POST(req: Request) {
     }
 
     if (!parsed.data.projectId) {
-      await assertCanCreateProject(session.user.id);
+      await assertCanCreateProject(session.userId);
     }
 
-    const model = isAllowedOpenRouterModel(parsed.data.model)
-      ? parsed.data.model
-      : DEFAULT_OPENROUTER_MODEL;
+    const provider = resolveProvider(parsed.data.provider);
+    const model = resolveModel(provider, parsed.data.model);
 
-    const { html, data, spec, provider, meta } = await generateWebsite({
-      prompt: parsed.data.prompt,
-      provider: getDefaultProvider(),
-      model,
-      fast: parsed.data.fast,
-      theme: parsed.data.theme,
-    });
+    // Generate → review → fix. One repair round is enough here: the pipeline
+    // already retries each stage internally, and generation is the expensive path.
+    let run: AgentRunResult | null = null;
+    try {
+      run = await runAgentLoop({
+        mode: "generate",
+        request: parsed.data.prompt,
+        provider,
+        model,
+        theme: parsed.data.theme,
+        maxFixAttempts: 1,
+      });
+    } catch (agentError) {
+      console.error("agent generate failed, using legacy generator", agentError);
+    }
+
+    const legacy = run
+      ? null
+      : await generateWebsite({
+          prompt: parsed.data.prompt,
+          provider,
+          model,
+          fast: parsed.data.fast,
+          theme: parsed.data.theme,
+        });
+
+    const html = run ? run.html : legacy!.html;
+    const data = run ? run.website : legacy!.data;
+    const spec = run ? run.spec : legacy!.spec;
+    const adherence = run
+      ? scoreBriefAdherence(run.website, parseBrief(parsed.data.prompt))
+      : (legacy!.meta?.adherence ?? null);
 
     const title = data?.brand || titleFromPrompt(parsed.data.prompt);
     const assistantMsg =
-      meta?.adherence != null && meta.adherence < 55
-        ? `Built your site from your brief (matched ${meta.adherence}% of your keywords — try refining in chat). Preview on the right.`
+      adherence != null && adherence < 55
+        ? `Built your site from your brief (matched ${adherence}% of your keywords — try refining in chat). Preview on the right.`
         : "Your site is ready — preview on the right. Ask me to change copy, colors, or sections in chat.";
 
     const serializedData =
@@ -97,7 +121,7 @@ export async function POST(req: Request) {
     let project;
     if (parsed.data.projectId) {
       const existing = await prisma.project.findFirst({
-        where: { id: parsed.data.projectId, userId: session.user.id },
+        where: { id: parsed.data.projectId, userId: session.userId },
       });
       if (!existing) {
         return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -111,8 +135,17 @@ export async function POST(req: Request) {
       project = await prisma.project.create({
         data: {
           ...projectData,
-          userId: session.user.id,
+          userId: session.userId,
         },
+      });
+    }
+
+    if (run) {
+      await persistAgentRun({
+        projectId: project.id,
+        kind: "generate",
+        request: parsed.data.prompt,
+        result: run,
       });
     }
 

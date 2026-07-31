@@ -1,7 +1,8 @@
 import type { ComponentType, CSSProperties } from "react";
 import type { SiteThemeName } from "@/lib/themes";
+import { sectionTokenVars } from "@/lib/themes/layout";
 import { imageFromSlot } from "@/lib/spec/images";
-import type { SectionId } from "@/lib/spec/schema";
+import type { DesignTokens, SectionId } from "@/lib/spec/schema";
 import {
   SpecBody,
   SpecButton,
@@ -16,11 +17,12 @@ type SectionProps = {
   brand: string;
   theme: SiteThemeName;
   siteSlug?: string;
+  tokens?: DesignTokens;
 };
 
-export function HeroCentered({ content, brand, theme }: SectionProps) {
+export function HeroCentered({ content, brand, theme, tokens }: SectionProps) {
   return (
-    <SpecSection theme={theme} id="top">
+    <SpecSection theme={theme} id="top" tokens={tokens}>
       <SpecWrap>
         <div style={{ textAlign: "center", maxWidth: "48rem", margin: "0 auto" }}>
           <SpecHeading level={1} theme={theme}>
@@ -38,10 +40,10 @@ export function HeroCentered({ content, brand, theme }: SectionProps) {
   );
 }
 
-export function HeroSplit({ content, brand, theme }: SectionProps) {
+export function HeroSplit({ content, brand, theme, tokens }: SectionProps) {
   const imageUrl = imageFromSlot(content.image, theme);
   return (
-    <SpecSection theme={theme} id="top">
+    <SpecSection theme={theme} id="top" tokens={tokens}>
       <SpecWrap>
         <div
           style={{
@@ -77,10 +79,10 @@ export function HeroSplit({ content, brand, theme }: SectionProps) {
   );
 }
 
-export function LogosStrip({ content, theme }: SectionProps) {
+export function LogosStrip({ content, theme, tokens }: SectionProps) {
   const logos = Array.isArray(content.logos) ? content.logos : [];
   return (
-    <SpecSection theme={theme} alt>
+    <SpecSection theme={theme} alt tokens={tokens}>
       <SpecWrap>
         <p style={{ textAlign: "center", color: "var(--muted)", marginBottom: "1.5rem" }}>
           {str(content.headline, "Trusted by")}
@@ -104,10 +106,10 @@ export function LogosStrip({ content, theme }: SectionProps) {
   );
 }
 
-export function Features3Col({ content, theme }: SectionProps) {
+export function Features3Col({ content, theme, tokens }: SectionProps) {
   const items = Array.isArray(content.items) ? content.items : [];
   return (
-    <SpecSection theme={theme} id="features">
+    <SpecSection theme={theme} id="features" tokens={tokens}>
       <SpecWrap>
         <SpecHeading theme={theme}>{str(content.headline, "What we offer")}</SpecHeading>
         <div
@@ -145,10 +147,10 @@ export function Features3Col({ content, theme }: SectionProps) {
   );
 }
 
-export function FeatureImageLeft({ content, theme }: SectionProps) {
+export function FeatureImageLeft({ content, theme, tokens }: SectionProps) {
   const imageUrl = imageFromSlot(content.image, theme);
   return (
-    <SpecSection theme={theme}>
+    <SpecSection theme={theme} tokens={tokens}>
       <SpecWrap>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2.5rem", alignItems: "center" }}>
           <div
@@ -172,10 +174,10 @@ export function FeatureImageLeft({ content, theme }: SectionProps) {
   );
 }
 
-export function FeatureImageRight({ content, theme }: SectionProps) {
+export function FeatureImageRight({ content, theme, tokens }: SectionProps) {
   const imageUrl = imageFromSlot(content.image, theme);
   return (
-    <SpecSection theme={theme}>
+    <SpecSection theme={theme} tokens={tokens}>
       <SpecWrap>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2.5rem", alignItems: "center" }}>
           <div>
@@ -199,10 +201,10 @@ export function FeatureImageRight({ content, theme }: SectionProps) {
   );
 }
 
-export function TestimonialSingle({ content, theme }: SectionProps) {
+export function TestimonialSingle({ content, theme, tokens }: SectionProps) {
   const photo = imageFromSlot(content.image, theme);
   return (
-    <SpecSection theme={theme} alt>
+    <SpecSection theme={theme} alt tokens={tokens}>
       <SpecWrap>
         <div style={{ maxWidth: "40rem", margin: "0 auto", textAlign: "center" }}>
           {photo ? (
@@ -229,10 +231,10 @@ export function TestimonialSingle({ content, theme }: SectionProps) {
   );
 }
 
-export function Pricing3Tier({ content, theme }: SectionProps) {
+export function Pricing3Tier({ content, theme, tokens }: SectionProps) {
   const plans = Array.isArray(content.plans) ? content.plans : [];
   return (
-    <SpecSection theme={theme} id="pricing">
+    <SpecSection theme={theme} id="pricing" tokens={tokens}>
       <SpecWrap>
         <div style={{ textAlign: "center" }}>
           <SpecHeading theme={theme}>{str(content.headline, "Pricing")}</SpecHeading>
@@ -283,10 +285,10 @@ export function Pricing3Tier({ content, theme }: SectionProps) {
   );
 }
 
-export function FaqAccordion({ content, theme }: SectionProps) {
+export function FaqAccordion({ content, theme, tokens }: SectionProps) {
   const items = Array.isArray(content.items) ? content.items : [];
   return (
-    <SpecSection theme={theme}>
+    <SpecSection theme={theme} tokens={tokens}>
       <SpecWrap>
         <SpecHeading theme={theme}>{str(content.headline, "FAQ")}</SpecHeading>
         <dl style={{ marginTop: "2rem", maxWidth: "48rem" }}>
@@ -311,10 +313,10 @@ export function FaqAccordion({ content, theme }: SectionProps) {
   );
 }
 
-export function AboutText({ content, brand, theme }: SectionProps) {
+export function AboutText({ content, brand, theme, tokens }: SectionProps) {
   const stats = Array.isArray(content.stats) ? content.stats : [];
   return (
-    <SpecSection theme={theme} id="about">
+    <SpecSection theme={theme} id="about" tokens={tokens}>
       <SpecWrap>
         <SpecHeading theme={theme}>{str(content.headline, `About ${brand}`)}</SpecHeading>
         <div style={{ marginTop: "1.25rem" }}>
@@ -344,9 +346,9 @@ export function AboutText({ content, brand, theme }: SectionProps) {
   );
 }
 
-export function ContactForm({ content, theme, siteSlug }: SectionProps) {
+export function ContactForm({ content, theme, siteSlug, tokens }: SectionProps) {
   return (
-    <SpecSection theme={theme} id="contact">
+    <SpecSection theme={theme} id="contact" tokens={tokens}>
       <SpecWrap>
         <div style={{ maxWidth: "32rem" }}>
           <SpecHeading theme={theme}>{str(content.headline, "Contact us")}</SpecHeading>
@@ -375,9 +377,13 @@ export function ContactForm({ content, theme, siteSlug }: SectionProps) {
   );
 }
 
-export function CtaBand({ content, theme }: SectionProps) {
+export function CtaBand({ content, theme, tokens }: SectionProps) {
   return (
-    <SpecSection theme={theme} style={{ background: "var(--accent)", color: "#111" }}>
+    <SpecSection
+      theme={theme}
+      tokens={tokens}
+      style={{ background: "var(--accent)", color: "#111" }}
+    >
       <SpecWrap>
         <div style={{ textAlign: "center" }}>
           <h2 style={{ margin: 0, fontFamily: "var(--display)", fontSize: "clamp(1.5rem, 3vw, 2.25rem)" }}>
@@ -389,8 +395,8 @@ export function CtaBand({ content, theme }: SectionProps) {
               style={{
                 display: "inline-flex",
                 padding: "0.85rem 1.5rem",
-                background: "#111",
-                color: "#fff",
+                background: "var(--button-bg, #111)",
+                color: "var(--button-text, #fff)",
                 borderRadius: "var(--radius)",
                 textDecoration: "none",
                 fontWeight: 600,
@@ -405,12 +411,13 @@ export function CtaBand({ content, theme }: SectionProps) {
   );
 }
 
-export function FooterSimple({ content, brand, theme }: SectionProps) {
+export function FooterSimple({ content, brand, theme, tokens }: SectionProps) {
   return (
     <footer
       style={{
         padding: "2.5rem 0",
         borderTop: "1px solid color-mix(in srgb, var(--text) 10%, transparent)",
+        ...sectionTokenVars(tokens),
       }}
     >
       <SpecWrap>

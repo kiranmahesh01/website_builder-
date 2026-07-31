@@ -32,9 +32,57 @@ export const StructureSchema = z.object({
 
 export type Structure = z.infer<typeof StructureSchema>;
 
+/** Hex colour only — these values are injected into inline styles, so keep them unambiguous. */
+export const HexColorSchema = z
+  .string()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Must be a hex colour like #2563EB");
+
+export const RadiusSchema = z.enum(["none", "small", "medium", "large"]);
+
+/** Fonts we already load from Google Fonts for the built-in themes. */
+export const SPEC_FONTS = [
+  "Archivo",
+  "Inter",
+  "Instrument Serif",
+  "Manrope",
+  "Playfair Display",
+  "DM Sans",
+  "Space Grotesk",
+] as const;
+
+export const SpecFontSchema = z.enum(SPEC_FONTS);
+
+/**
+ * Overrides layered on top of the theme preset. Every field is optional so that
+ * specs saved before design tokens existed still parse.
+ */
+export const DesignTokensSchema = z.object({
+  primary: HexColorSchema.optional(),
+  accent: HexColorSchema.optional(),
+  surface: HexColorSchema.optional(),
+  surfaceAlt: HexColorSchema.optional(),
+  text: HexColorSchema.optional(),
+  muted: HexColorSchema.optional(),
+  buttonBg: HexColorSchema.optional(),
+  buttonText: HexColorSchema.optional(),
+  radius: RadiusSchema.optional(),
+  displayFont: SpecFontSchema.optional(),
+  bodyFont: SpecFontSchema.optional(),
+});
+
+export type DesignTokens = z.infer<typeof DesignTokensSchema>;
+
+export const DESIGN_TOKEN_KEYS = Object.keys(
+  DesignTokensSchema.shape,
+) as (keyof DesignTokens)[];
+
 export const SpecSectionSchema = z.object({
   id: SectionIdSchema,
+  /** Stable instance key ("home.hero_split#0") so refinements can address one section. */
+  key: z.string().min(1).optional(),
   content: z.record(z.string(), z.unknown()),
+  /** Design token overrides scoped to this section. */
+  tokens: DesignTokensSchema.optional(),
 });
 
 export const SpecPageSchema = z.object({
@@ -52,6 +100,8 @@ export const SiteSpecSchema = z.object({
       description: z.string(),
     })
     .optional(),
+  /** Site-wide design token overrides. */
+  design: DesignTokensSchema.optional(),
   pages: z.array(SpecPageSchema).min(1),
 });
 
@@ -91,4 +141,33 @@ export function parsePageContent(input: unknown): PageContent | null {
 export function parseSiteSpec(input: unknown): SiteSpec | null {
   const r = SiteSpecSchema.safeParse(input);
   return r.success ? r.data : null;
+}
+
+export function sectionKey(
+  pageSlug: string,
+  sectionId: string,
+  index: number,
+): string {
+  return `${pageSlug}.${sectionId}#${index}`;
+}
+
+export function componentKey(sectionKeyValue: string, slot: string): string {
+  return `${sectionKeyValue}.${slot}`;
+}
+
+/**
+ * Fill in any missing section keys deterministically. Older specs were saved
+ * without keys, so this runs on load as well as after generation.
+ */
+export function withSectionKeys(spec: SiteSpec): SiteSpec {
+  return {
+    ...spec,
+    pages: spec.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section, i) => ({
+        ...section,
+        key: section.key || sectionKey(page.slug, section.id, i),
+      })),
+    })),
+  };
 }

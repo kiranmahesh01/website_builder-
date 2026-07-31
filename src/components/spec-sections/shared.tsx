@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { SiteThemeName } from "@/lib/themes";
-import { getThemeLayout } from "@/lib/themes/layout";
+import type { DesignTokens } from "@/lib/spec/schema";
+import { getThemeLayout, sectionTokenVars } from "@/lib/themes/layout";
 
 export function SpecWrap({ children }: { children: ReactNode }) {
   return (
@@ -16,14 +17,17 @@ export function SpecSection({
   alt,
   id,
   style,
+  tokens,
 }: {
   children: ReactNode;
   theme: SiteThemeName;
   alt?: boolean;
   id?: string;
   style?: CSSProperties;
+  tokens?: DesignTokens;
 }) {
   const layout = getThemeLayout(theme);
+  const scoped = sectionTokenVars(tokens);
   return (
     <section
       id={id}
@@ -31,6 +35,7 @@ export function SpecSection({
         padding: layout.sectionPadding,
         background: alt ? "var(--surface-alt)" : undefined,
         ...style,
+        ...scoped,
       }}
     >
       {children}
@@ -113,15 +118,15 @@ export function SpecButton({
 
   const outlineStyle = {
     ...base,
-    border: "1px solid var(--accent)",
-    color: "var(--accent)",
+    border: "1px solid var(--button-bg, var(--accent))",
+    color: "var(--button-bg, var(--accent))",
     background: "transparent",
   };
 
   const solidStyle = {
     ...base,
-    background: "var(--accent)",
-    color: theme === "minimal_studio" ? "#111" : "#111",
+    background: "var(--button-bg, var(--accent))",
+    color: "var(--button-text, #111)",
     border: "none",
   };
 

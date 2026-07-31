@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { getThemeTokens, type SiteThemeName } from "@/lib/themes";
+import type { DesignTokens } from "@/lib/spec/schema";
 
 export type ThemeLayout = {
   sectionPadding: string;
@@ -44,29 +45,86 @@ export function getThemeLayout(theme: SiteThemeName): ThemeLayout {
   }
 }
 
-export function specThemeVars(theme: SiteThemeName): CSSProperties {
-  const t = getThemeTokens(theme);
-  const radius =
-    t.radius === "none"
-      ? "0"
-      : t.radius === "small"
-        ? "8px"
-        : t.radius === "large"
-          ? "16px"
-          : "10px";
+function radiusToPx(radius: string | undefined): string {
+  switch (radius) {
+    case "none":
+      return "0";
+    case "small":
+      return "8px";
+    case "large":
+      return "16px";
+    default:
+      return "10px";
+  }
+}
+
+/** Theme preset merged with the project's design token overrides. */
+export function resolveSpecTokens(
+  theme: SiteThemeName,
+  overrides?: DesignTokens,
+) {
+  const base = getThemeTokens(theme);
+  return {
+    primary: overrides?.primary || base.primary,
+    accent: overrides?.accent || base.accent,
+    surface: overrides?.surface || base.surface,
+    surfaceAlt: overrides?.surfaceAlt || base.surfaceAlt || base.surface,
+    text: overrides?.text || base.text,
+    muted: overrides?.muted || base.muted,
+    displayFont: overrides?.displayFont || base.displayFont,
+    bodyFont: overrides?.bodyFont || base.bodyFont,
+    radius: overrides?.radius || base.radius,
+    buttonBg: overrides?.buttonBg,
+    buttonText: overrides?.buttonText,
+  };
+}
+
+export function specThemeVars(
+  theme: SiteThemeName,
+  overrides?: DesignTokens,
+): CSSProperties {
+  const t = resolveSpecTokens(theme, overrides);
   return {
     "--primary": t.primary,
     "--accent": t.accent,
     "--surface": t.surface,
-    "--surface-alt": t.surfaceAlt || t.surface,
+    "--surface-alt": t.surfaceAlt,
     "--text": t.text,
     "--muted": t.muted,
+    ...(t.buttonBg ? { "--button-bg": t.buttonBg } : {}),
+    ...(t.buttonText ? { "--button-text": t.buttonText } : {}),
     "--display": `"${t.displayFont}", Georgia, serif`,
     "--body": `"${t.bodyFont}", system-ui, sans-serif`,
-    "--radius": radius,
+    "--radius": radiusToPx(t.radius),
     background: t.surface,
     color: t.text,
     fontFamily: `"${t.bodyFont}", system-ui, sans-serif`,
     minHeight: "100%",
   } as CSSProperties;
+}
+
+/** Section-scoped overrides — only emits the vars that were actually set. */
+export function sectionTokenVars(
+  overrides?: DesignTokens,
+): CSSProperties | undefined {
+  if (!overrides) return undefined;
+  const vars: Record<string, string> = {};
+  if (overrides.accent) vars["--accent"] = overrides.accent;
+  if (overrides.surface) vars["--surface"] = overrides.surface;
+  if (overrides.surfaceAlt) vars["--surface-alt"] = overrides.surfaceAlt;
+  if (overrides.text) vars["--text"] = overrides.text;
+  if (overrides.muted) vars["--muted"] = overrides.muted;
+  if (overrides.buttonBg) vars["--button-bg"] = overrides.buttonBg;
+  if (overrides.buttonText) vars["--button-text"] = overrides.buttonText;
+  if (overrides.radius) vars["--radius"] = radiusToPx(overrides.radius);
+  if (overrides.displayFont) {
+    vars["--display"] = `"${overrides.displayFont}", Georgia, serif`;
+  }
+  if (overrides.bodyFont) {
+    vars["--body"] = `"${overrides.bodyFont}", system-ui, sans-serif`;
+  }
+  if (Object.keys(vars).length === 0) return undefined;
+  if (overrides.surface) vars.background = overrides.surface;
+  if (overrides.text) vars.color = overrides.text;
+  return vars as CSSProperties;
 }

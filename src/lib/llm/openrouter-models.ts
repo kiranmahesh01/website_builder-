@@ -80,7 +80,10 @@ export function supportsJsonObject(model: string): boolean {
 }
 
 export function isRetryableOpenRouterError(message: string): boolean {
-  return /429|rate|404|unavailable|resourceexhausted|overloaded|capacity|timeout|502|503|504|provider returned error/i.test(
+  // Free models frequently return an empty body under load — that is a
+  // transient provider failure, so the chain should move to the next model
+  // rather than aborting the whole request.
+  return /429|rate|404|unavailable|resourceexhausted|overloaded|capacity|timeout|502|503|504|provider returned error|empty response|invalid json/i.test(
     message,
   );
 }

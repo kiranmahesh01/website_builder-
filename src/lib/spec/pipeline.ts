@@ -1,4 +1,5 @@
 import { parseBrief } from "@/lib/brief-parser";
+import { generateWithNvidia } from "@/lib/llm/nvidia";
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
 import {
   extractJsonObject,
@@ -44,7 +45,13 @@ async function callJson(
   model?: string | null,
 ): Promise<unknown> {
   let raw: string;
-  if (provider === "openai") {
+  if (provider === "nvidia") {
+    raw = await generateWithNvidia(messages, {
+      maxTokens,
+      json: true,
+      model: model || undefined,
+    });
+  } else if (provider === "openai") {
     raw = await generateWithOpenAI(messages);
   } else if (provider === "gemini") {
     raw = await generateWithGemini(messages);
@@ -60,6 +67,25 @@ async function callJson(
   const json = extractJsonObject(raw);
   if (!json) throw new Error("Model returned invalid JSON");
   return json;
+}
+
+/** Never throws: a failed step should retry or fall back, not abort generation. */
+async function tryCallJson(
+  provider: Exclude<LlmProvider, "demo" | "openrouter-best">,
+  messages: ChatMessage[],
+  maxTokens: number,
+  model: string | null | undefined,
+  step: string,
+): Promise<unknown | null> {
+  try {
+    return await callJson(provider, messages, maxTokens, model);
+  } catch (error) {
+    console.warn(
+      `spec pipeline: ${step} attempt failed —`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
 }
 
 function businessContext(prompt: string, plan: Plan): string {
@@ -83,15 +109,17 @@ async function callPlan(
   model?: string | null,
 ): Promise<Plan> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const json = await callJson(
+    const json = await tryCallJson(
       provider,
       [
         { role: "system", content: PLAN_SYSTEM_PROMPT },
         { role: "user", content: planUserMessage(prompt) },
       ],
-      500,
+      900,
       model,
+      "plan",
     );
+    if (!json) continue;
     const plan = parsePlan(json);
     if (plan) {
       if (preferredTheme) {
@@ -110,7 +138,7 @@ async function callStructure(
   model?: string | null,
 ): Promise<SectionId[]> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const json = await callJson(
+    const json = await tryCallJson(
       provider,
       [
         { role: "system", content: STRUCTURE_SYSTEM_PROMPT },
@@ -119,9 +147,11 @@ async function callStructure(
           content: structureUserMessage(intent, context),
         },
       ],
-      400,
+      600,
       model,
+      "structure",
     );
+    if (!json) continue;
     const structure = parseStructure(json);
     if (structure) {
       const normalized = normalizeStructure(structure.sections);
@@ -145,15 +175,17 @@ async function callPageContent(
   ) as Record<string, Record<string, unknown>>;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const json = await callJson(
+    const json = await tryCallJson(
       provider,
       [
         { role: "system", content: contentSystemPrompt(sectionIds) },
         { role: "user", content: contentUserMessage(sectionIds, context) },
       ],
-      2800,
+      3600,
       model,
+      "content",
     );
+    if (!json) continue;
     const parsed = parsePageContent(json);
     if (!parsed) continue;
 

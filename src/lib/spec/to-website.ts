@@ -1,4 +1,4 @@
-import type { Section, Website } from "@/lib/schema";
+import type { Section, Theme, Website } from "@/lib/schema";
 import { normalizeUiKit } from "@/lib/ui-kits";
 import {
   getThemeTokens,
@@ -191,7 +191,21 @@ export function specToWebsite(
   options?: { theme?: string | null; uiKit?: string | null },
 ): Website {
   const themeName = normalizeSiteTheme(options?.theme || spec.theme);
-  const tokens = getThemeTokens(themeName);
+  // Design token overrides must reach the visual editor and legacy renderer,
+  // not just the spec renderer. buttonBg/buttonText have no Theme equivalent.
+  const base = getThemeTokens(themeName);
+  const design = spec.design || {};
+  const tokens: Theme = {
+    primary: design.primary || base.primary,
+    accent: design.buttonBg || design.accent || base.accent,
+    surface: design.surface || base.surface,
+    surfaceAlt: design.surfaceAlt || base.surfaceAlt,
+    text: design.text || base.text,
+    muted: design.muted || base.muted,
+    displayFont: design.displayFont || base.displayFont,
+    bodyFont: design.bodyFont || base.bodyFont,
+    radius: design.radius || base.radius,
+  };
   const kit = options?.uiKit
     ? normalizeUiKit(options.uiKit)
     : themeToUiKit(themeName);

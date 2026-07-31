@@ -1,4 +1,5 @@
 export type LlmProvider =
+  | "nvidia"
   | "openai"
   | "gemini"
   | "bytez"
@@ -13,6 +14,7 @@ export type ChatMessage = {
 
 export function availableProviders(): LlmProvider[] {
   const providers: LlmProvider[] = [];
+  if (process.env.NVIDIA_API_KEY) providers.push("nvidia");
   if (process.env.OPENROUTER_API_KEY) {
     providers.push("openrouter");
   }
@@ -26,8 +28,13 @@ export function availableProviders(): LlmProvider[] {
   return providers;
 }
 
-/** Production default: OpenRouter when key is set, else first available, else demo. */
+/**
+ * Production default: NVIDIA NIM first — its free tier is rate limited rather
+ * than credit limited and its models follow JSON instructions far more
+ * reliably than the OpenRouter free pool.
+ */
 export function getDefaultProvider(): LlmProvider {
+  if (process.env.NVIDIA_API_KEY) return "nvidia";
   if (process.env.OPENROUTER_API_KEY) return "openrouter";
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.GOOGLE_AI_API_KEY) return "gemini";
@@ -37,6 +44,8 @@ export function getDefaultProvider(): LlmProvider {
 
 function missingProviderMessage(provider: LlmProvider): string {
   switch (provider) {
+    case "nvidia":
+      return "NVIDIA NIM is not configured. Get a free key at https://build.nvidia.com and set NVIDIA_API_KEY in .env.";
     case "openai":
       return "OpenAI is not configured. Set OPENAI_API_KEY in .env, or switch to Demo (no API key).";
     case "gemini":
@@ -54,7 +63,16 @@ function missingProviderMessage(provider: LlmProvider): string {
 export function resolveProvider(preferred?: string | null): LlmProvider {
   const available = availableProviders();
 
-  // OpenRouter is the primary provider — use it whenever the key is configured.
+  // Honour an explicit, configured choice before falling back to defaults.
+  if (preferred && preferred !== "demo" && available.includes(preferred as LlmProvider)) {
+    return preferred as LlmProvider;
+  }
+
+  // NVIDIA NIM is the primary provider whenever its key is configured.
+  if (process.env.NVIDIA_API_KEY && preferred !== "demo") {
+    return "nvidia";
+  }
+
   if (process.env.OPENROUTER_API_KEY && preferred !== "demo") {
     if (preferred === "openrouter-best" && available.includes("openrouter-best")) {
       return "openrouter-best";
@@ -66,6 +84,7 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
   }
 
   if (
+    preferred === "nvidia" ||
     preferred === "openai" ||
     preferred === "gemini" ||
     preferred === "bytez" ||
@@ -75,6 +94,7 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
   ) {
     if (available.includes(preferred)) return preferred;
     if (
+      preferred === "nvidia" ||
       preferred === "openai" ||
       preferred === "gemini" ||
       preferred === "bytez" ||
@@ -128,21 +148,98 @@ export function extractHtml(text: string): string {
   return text.trim();
 }
 
+/**
+ * Rebuilds JSON that was cut off mid-value, which is how small free models
+ * usually fail: closes an open string, drops a dangling key or comma, and
+ * balances the remaining brackets.
+ */
+function repairTruncatedJson(text: string): string | null {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  let stringStart = -1;
+
+  // Longest prefix that ends on a value boundary, plus the brackets open there.
+  let safeEnd = -1;
+  let safeStack: string[] = [];
+  const markSafe = (end: number) => {
+    safeEnd = end;
+    safeStack = [...stack];
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+        // A completed string is a safe boundary only when it is a value:
+        // after ':' anywhere, or after ',' / '[' inside an array. After ','
+        // inside an object it is a key still waiting for its value.
+        const before = text.slice(0, stringStart).trimEnd();
+        const prev = before[before.length - 1];
+        const inArray = stack[stack.length - 1] === "]";
+        if (prev === ":" || (inArray && (prev === "," || prev === "["))) {
+          markSafe(i + 1);
+        }
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      stringStart = i;
+    } else if (char === "{" || char === "[") {
+      stack.push(char === "{" ? "}" : "]");
+      markSafe(i + 1);
+    } else if (char === "}" || char === "]") {
+      if (stack[stack.length - 1] !== char) return null;
+      stack.pop();
+      if (stack.length === 0) return text.slice(0, i + 1);
+      markSafe(i + 1);
+    } else if (char === ",") {
+      markSafe(i);
+    }
+  }
+
+  if (stack.length === 0 || safeEnd < 0) return null;
+
+  const body = text.slice(0, safeEnd).replace(/[,:]\s*$/, "");
+  return `${body}${[...safeStack].reverse().join("")}`;
+}
+
 export function extractJsonObject(text: string): unknown | null {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = (fenced?.[1] || text).trim();
+
   try {
     return JSON.parse(candidate);
   } catch {
-    const start = candidate.indexOf("{");
-    const end = candidate.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(candidate.slice(start, end + 1));
-      } catch {
-        return null;
-      }
+    // fall through to progressively more forgiving strategies
+  }
+
+  const start = candidate.indexOf("{");
+  if (start < 0) return null;
+
+  const sliced = candidate.slice(start);
+  const end = sliced.lastIndexOf("}");
+  if (end > 0) {
+    try {
+      return JSON.parse(sliced.slice(0, end + 1));
+    } catch {
+      // the braces balance but the content is malformed — try repairing
     }
+  }
+
+  const repaired = repairTruncatedJson(sliced);
+  if (!repaired) return null;
+  try {
+    return JSON.parse(repaired);
+  } catch {
     return null;
   }
 }

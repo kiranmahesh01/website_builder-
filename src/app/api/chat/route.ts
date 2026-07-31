@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { runAgentLoop } from "@/lib/agents";
+import { loadProjectMemory, persistAgentRun } from "@/lib/agents/memory-store";
+import { buildMemory } from "@/lib/agents/memory";
+import { requireUserId } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { refineWebsite } from "@/lib/llm";
-import {
-  DEFAULT_OPENROUTER_MODEL,
-  isAllowedOpenRouterModel,
-} from "@/lib/llm/openrouter-models";
-import { getDefaultProvider } from "@/lib/llm/types";
-import { renderSpecToHtml } from "@/lib/render-site";
-import { refineSiteSpec } from "@/lib/spec/refine";
-import { specToWebsite } from "@/lib/spec/to-website";
+import { resolveModel } from "@/lib/llm/resolve-model";
+import { resolveProvider } from "@/lib/llm/types";
 import {
   deserializeProjectData,
   deserializeSiteData,
@@ -23,15 +20,15 @@ const schema = z.object({
   projectId: z.string().min(1),
   message: z.string().min(1).max(4000),
   provider: z
-    .enum(["openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
+    .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
     .optional(),
   model: z.string().max(120).optional(),
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireUserId();
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
   try {
@@ -42,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     const project = await prisma.project.findFirst({
-      where: { id: parsed.data.projectId, userId: session.user.id },
+      where: { id: parsed.data.projectId, userId: session.userId },
       include: {
         messages: { orderBy: { createdAt: "asc" }, take: 20 },
       },
@@ -59,29 +56,32 @@ export async function POST(req: Request) {
       );
     }
 
-    const provider = getDefaultProvider();
-    const model = isAllowedOpenRouterModel(parsed.data.model)
-      ? parsed.data.model
-      : project.model && isAllowedOpenRouterModel(project.model)
-        ? project.model
-        : DEFAULT_OPENROUTER_MODEL;
+    const provider = resolveProvider(parsed.data.provider);
+    const model = resolveModel(provider, parsed.data.model, project.model);
 
     const existing = deserializeProjectData(project.data);
     let html: string;
     let serialized: string | undefined;
     let reply: string;
+    let run: Awaited<ReturnType<typeof runAgentLoop>> | null = null;
 
     if (existing) {
-      const patched = await refineSiteSpec({
-        spec: existing.spec,
-        instruction: parsed.data.message,
+      const memory = await loadProjectMemory(project.id, existing.spec).catch(
+        () => buildMemory(existing.spec),
+      );
+      run = await runAgentLoop({
+        mode: "refine",
+        request: parsed.data.message,
         provider,
         model,
+        spec: existing.spec,
+        memory,
       });
-      const website = specToWebsite(patched);
-      html = await renderSpecToHtml(patched);
-      serialized = serializeProjectData({ spec: patched, website });
-      reply = `Updated based on: "${parsed.data.message}"`;
+      html = run.html;
+      serialized = serializeProjectData({ spec: run.spec, website: run.website });
+      reply = run.changed
+        ? `Updated: ${run.summary}`
+        : "I could not pin that change to a specific part of the site — try naming the section, e.g. \"make the hero button blue\".";
     } else {
       const result = await refineWebsite({
         currentHtml: project.html,
@@ -101,6 +101,15 @@ export async function POST(req: Request) {
     }
 
     await snapshotProjectVersion(project.id, "Before refine");
+
+    if (run) {
+      await persistAgentRun({
+        projectId: project.id,
+        kind: "refine",
+        request: parsed.data.message,
+        result: run,
+      });
+    }
 
     const updated = await prisma.project.update({
       where: { id: project.id },
