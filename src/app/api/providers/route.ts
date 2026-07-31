@@ -9,6 +9,7 @@ import {
 import {
   defaultNvidiaModel,
   NVIDIA_MODEL_OPTIONS,
+  nvidiaAutoOptionLabel,
   nvidiaModelChain,
   nvidiaVisionModel,
 } from "@/lib/llm/nvidia-models";
@@ -23,7 +24,7 @@ export async function GET() {
       ? {
           ...option,
           id: nvidiaDefault,
-          label: "Auto (NVIDIA)",
+          label: nvidiaAutoOptionLabel(nvidiaDefault),
           // Keep catalog role (DeepSeek Flash → 120B → Ultra).
           role: option.role,
         }

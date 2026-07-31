@@ -33,7 +33,11 @@ import {
   DEFAULT_OPENROUTER_MODEL,
   OPENROUTER_MODEL_OPTIONS,
 } from "@/lib/llm/openrouter-models";
-import { DEFAULT_NVIDIA_MODEL } from "@/lib/llm/nvidia-models";
+import {
+  DEFAULT_NVIDIA_MODEL,
+  NVIDIA_MODEL_OPTIONS,
+  nvidiaAutoOptionLabel,
+} from "@/lib/llm/nvidia-models";
 
 type Message = {
   id?: string;
@@ -92,10 +96,11 @@ export function BuilderWorkspace({
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [siteTheme, setSiteTheme] = useState<SiteThemeName>(DEFAULT_SITE_THEME);
-  const [llmProvider, setLlmProvider] = useState("openrouter");
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_OPENROUTER_MODEL);
+  // Optimistic NVIDIA/DeepSeek defaults so the picker is correct before /api/providers loads.
+  const [llmProvider, setLlmProvider] = useState("nvidia");
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_NVIDIA_MODEL);
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([
-    ...OPENROUTER_MODEL_OPTIONS,
+    ...NVIDIA_MODEL_OPTIONS,
   ]);
   const [llmReady, setLlmReady] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
@@ -158,7 +163,7 @@ export function BuilderWorkspace({
           openrouterOptions?: ModelOption[];
           nvidiaOptions?: ModelOption[];
         };
-        const provider = providersData.defaults?.provider || "openrouter";
+        const provider = providersData.defaults?.provider || "nvidia";
         const defaultModel =
           providersData.defaults?.model ||
           (provider === "nvidia" ? DEFAULT_NVIDIA_MODEL : DEFAULT_OPENROUTER_MODEL);
@@ -167,13 +172,15 @@ export function BuilderWorkspace({
           const options =
             providersData.nvidiaOptions && providersData.nvidiaOptions.length > 0
               ? providersData.nvidiaOptions
-              : [
-                  {
-                    id: defaultModel,
-                    label: "Auto (NVIDIA)",
-                    role: "Default — NVIDIA NIM primary + fallbacks",
-                  },
-                ];
+              : NVIDIA_MODEL_OPTIONS.map((option, index) =>
+                  index === 0
+                    ? {
+                        ...option,
+                        id: defaultModel,
+                        label: nvidiaAutoOptionLabel(defaultModel),
+                      }
+                    : option,
+                );
           setModelOptions(options);
           setSelectedModel(defaultModel);
         } else {

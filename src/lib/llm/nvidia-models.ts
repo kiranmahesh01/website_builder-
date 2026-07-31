@@ -73,6 +73,34 @@ export function isAllowedNvidiaModel(model: string | null | undefined): boolean 
   return /^[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(id);
 }
 
+/** Human-readable names for known NIM ids (picker + Auto label). */
+export const NVIDIA_MODEL_LABELS: Record<string, string> = {
+  "deepseek-ai/deepseek-v4-flash": "DeepSeek V4 Flash",
+  "openai/gpt-oss-120b": "GPT-OSS 120B",
+  "nvidia/nemotron-3-ultra-550b-a55b": "Nemotron Ultra 550B",
+};
+
+export function nvidiaModelDisplayName(modelId: string): string {
+  const id = modelId.trim();
+  if (NVIDIA_MODEL_LABELS[id]) return NVIDIA_MODEL_LABELS[id];
+  if (id.includes("deepseek-v4-flash")) return "DeepSeek V4 Flash";
+  if (id.includes("gpt-oss-120b")) return "GPT-OSS 120B";
+  if (id.includes("nemotron-3-ultra")) return "Nemotron Ultra 550B";
+  return id.split("/").pop()?.replace(/-/g, " ") || id;
+}
+
+/** Picker label for the Auto/chain entry — always names the primary model. */
+export function nvidiaAutoOptionLabel(
+  modelId: string = DEFAULT_NVIDIA_MODEL,
+): string {
+  return `Auto — ${nvidiaModelDisplayName(modelId)}`;
+}
+
+/**
+ * Picker options. First entry is Auto (primary + fallbacks); pinned models
+ * follow. DeepSeek is first — Auto and primary share the same NIM id, so we
+ * do not duplicate a second DeepSeek row.
+ */
 export const NVIDIA_MODEL_OPTIONS: {
   id: string;
   label: string;
@@ -80,13 +108,8 @@ export const NVIDIA_MODEL_OPTIONS: {
 }[] = [
   {
     id: DEFAULT_NVIDIA_MODEL,
-    label: "Auto (NVIDIA)",
+    label: nvidiaAutoOptionLabel(DEFAULT_NVIDIA_MODEL),
     role: "DeepSeek Flash → GPT-OSS 120B → Ultra",
-  },
-  {
-    id: "deepseek-ai/deepseek-v4-flash",
-    label: "DeepSeek V4 Flash",
-    role: "Primary — thinking (medium effort)",
   },
   {
     id: "openai/gpt-oss-120b",
