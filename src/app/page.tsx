@@ -93,7 +93,7 @@ export default async function HomePage() {
                 Dashboard
               </Link>
               <Link
-                href="/onboarding"
+                href="/create"
                 className="rounded-full bg-fog px-5 py-2.5 text-sm font-semibold text-ink transition hover:bg-white"
               >
                 Open builder
@@ -222,7 +222,7 @@ export default async function HomePage() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Link
-              href={session?.user ? "/onboarding" : "/signup"}
+              href={session?.user ? "/create" : "/signup"}
               className="inline-flex rounded-full bg-lime px-8 py-3.5 text-sm font-semibold text-ink transition hover:bg-lime-deep"
             >
               Start building free

@@ -47,6 +47,8 @@ export type AgentRunInput = {
   memory?: ProjectMemoryModel | null;
   theme?: string | null;
   uiKit?: string | null;
+  /** User-selected template from the create wizard (generate only). */
+  templateId?: string | null;
   maxFixAttempts?: number;
   /** Spend a model call on subjective copy review once the hard checks pass. */
   judge?: boolean;
@@ -124,7 +126,9 @@ export async function runAgentLoop(
 
   let retrieved =
     input.mode === "generate" || !startingSpec
-      ? retrieveTemplates(input.request)
+      ? retrieveTemplates(input.request, 2, {
+          templateId: input.templateId || undefined,
+        })
       : null;
 
   if (retrieved) {
@@ -132,7 +136,12 @@ export async function runAgentLoop(
       "manager",
       "progress",
       retrieved.matches.length > 0
-        ? `KB matched ${retrieved.matches.map((m) => m.template.id).join(", ")} (${retrieved.confidence})`
+        ? input.templateId
+          ? `Using selected template ${input.templateId} (+ ${retrieved.matches
+              .map((m) => m.template.id)
+              .filter((id) => id !== input.templateId)
+              .join(", ") || "KB"})`
+          : `KB matched ${retrieved.matches.map((m) => m.template.id).join(", ")} (${retrieved.confidence})`
         : "KB found no strong industry match",
     );
   }
@@ -192,12 +201,15 @@ export async function runAgentLoop(
     if (decision.step === "design") {
       emit("designer", "start", "Building the website blueprint");
       if (!retrieved) {
-        retrieved = retrieveTemplates(input.request);
+        retrieved = retrieveTemplates(input.request, 2, {
+          templateId: input.templateId || undefined,
+        });
       }
       blueprint = await runDesigner({
         brief: input.request,
         retrieved,
         ctx,
+        templateId: input.templateId || undefined,
         // Prefer deterministic when budget is tight.
         forceDeterministic: ctx.budget.used >= ctx.budget.max - 1,
       });

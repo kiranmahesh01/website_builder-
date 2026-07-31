@@ -53,7 +53,7 @@ export default async function DashboardPage() {
             Leads
           </Link>
           <Link
-            href="/builder"
+            href="/create"
             className="rounded-full bg-lime px-5 py-2.5 text-sm font-semibold text-ink"
           >
             New site
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
               Describe what you want to build and Magic AI will generate it.
             </p>
             <Link
-              href="/builder"
+              href="/create"
               className="mt-6 inline-flex rounded-full bg-lime px-6 py-3 text-sm font-semibold text-ink"
             >
               Start building

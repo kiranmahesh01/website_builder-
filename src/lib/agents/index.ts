@@ -28,6 +28,7 @@ export {
   reviewQuality,
   summarizeIssues,
   computeDesignScore,
+  computeQualityScores,
 } from "./reviewer";
 export { deterministicRepair } from "./fixer";
 export { decideNextStep, MANAGER_STEPS } from "./manager";
@@ -40,5 +41,5 @@ export {
 } from "./designer";
 export type { WebsiteBlueprint } from "./designer";
 export { planFromBrief, runGeneratePlanner } from "./planner";
-export { ensureSeo } from "./seo";
+export { ensureSeo, buildJsonLd, sitemapHint } from "./seo";
 export * from "./types";

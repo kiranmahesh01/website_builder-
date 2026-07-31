@@ -19,7 +19,7 @@ export function HeroPrompt() {
     e.preventDefault();
     const value = prompt.trim();
     if (!value) return;
-    router.push(`/builder?prompt=${encodeURIComponent(value)}`);
+    router.push(`/create?prompt=${encodeURIComponent(value)}`);
   }
 
   return (
@@ -35,7 +35,7 @@ export function HeroPrompt() {
           type="submit"
           className="rounded-full bg-lime px-6 py-3 text-sm font-semibold text-ink transition hover:bg-lime-deep"
         >
-          Generate
+          Start
         </button>
       </form>
       <div className="mt-5 flex flex-wrap justify-center gap-2">

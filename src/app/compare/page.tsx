@@ -58,7 +58,7 @@ export default function ComparePage() {
           magic ai
         </Link>
         <Link
-          href="/onboarding"
+          href="/create"
           className="rounded-full bg-fog px-5 py-2.5 text-sm font-semibold text-ink transition hover:bg-white"
         >
           Try free
@@ -181,7 +181,7 @@ export default function ComparePage() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Link
-              href="/onboarding"
+              href="/create"
               className="rounded-full bg-lime px-8 py-3 text-sm font-semibold text-ink"
             >
               Build a site

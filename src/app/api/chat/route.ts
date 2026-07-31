@@ -78,7 +78,11 @@ export async function POST(req: Request) {
         memory,
       });
       html = run.html;
-      serialized = serializeProjectData({ spec: run.spec, website: run.website });
+      serialized = serializeProjectData({
+        spec: run.spec,
+        website: run.website,
+        brandKit: existing.brandKit,
+      });
       reply = run.changed
         ? `Updated: ${run.summary}`
         : "I could not pin that change to a specific part of the site — try naming the section, e.g. \"make the hero button blue\".";

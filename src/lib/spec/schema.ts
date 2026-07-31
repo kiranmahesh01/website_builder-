@@ -101,6 +101,8 @@ export const SiteSpecSchema = z.object({
     .object({
       title: z.string(),
       description: z.string(),
+      keywords: z.array(z.string()).max(12).optional(),
+      ogImage: z.string().optional(),
     })
     .optional(),
   /** Site-wide design token overrides. */

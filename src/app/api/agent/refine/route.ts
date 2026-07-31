@@ -27,7 +27,31 @@ const schema = z.object({
 
 type StreamChunk =
   | { type: "event"; event: AgentEvent }
-  | { type: "result"; project: unknown; messages: unknown; passed: boolean }
+  | {
+      type: "result";
+      project: unknown;
+      messages: unknown;
+      passed: boolean;
+      review?: {
+        score: number;
+        passed: boolean;
+        scores?: {
+          design: number;
+          mobile: number;
+          seo: number;
+          performance: number;
+          overall: number;
+        };
+        issues: {
+          code: string;
+          severity: string;
+          message: string;
+          hint?: string;
+          path?: string;
+          sectionKey?: string;
+        }[];
+      };
+    }
   | { type: "error"; error: string };
 
 function jsonResponse(body: unknown, status: number) {
@@ -126,7 +150,11 @@ export async function POST(request: Request) {
           where: { id: project.id },
           data: {
             html: run.html,
-            data: serializeProjectData({ spec: run.spec, website: run.website }),
+            data: serializeProjectData({
+              spec: run.spec,
+              website: run.website,
+              brandKit: existing.brandKit,
+            }),
             provider,
             model,
             messages: {
@@ -142,6 +170,19 @@ export async function POST(request: Request) {
         send({
           type: "result",
           passed: run.passed,
+          review: {
+            score: run.review.score,
+            passed: run.review.passed,
+            scores: run.review.scores,
+            issues: run.review.issues.map((issue) => ({
+              code: issue.code,
+              severity: issue.severity,
+              message: issue.message,
+              hint: issue.hint,
+              path: issue.path,
+              sectionKey: issue.sectionKey,
+            })),
+          },
           project: {
             id: updated.id,
             title: updated.title,

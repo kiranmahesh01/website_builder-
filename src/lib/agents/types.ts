@@ -70,10 +70,20 @@ export type ReviewCheck = {
   detail?: string;
 };
 
+export type QualityScores = {
+  design: number;
+  mobile: number;
+  seo: number;
+  performance: number;
+  overall: number;
+};
+
 export type ReviewReport = {
   passed: boolean;
   /** Design / quality score 0–100 (deterministic rubric). */
   score: number;
+  /** Multi-dimension breakdown for the Website Critic UI. */
+  scores?: QualityScores;
   issues: ValidationIssue[];
   checks: ReviewCheck[];
   /** Populated by the render smoke test so callers can reuse the output. */

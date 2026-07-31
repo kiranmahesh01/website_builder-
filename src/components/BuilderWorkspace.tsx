@@ -4,9 +4,20 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgentProgress } from "@/components/AgentProgress";
+import {
+  BrandMemoryPanel,
+  PublishFlowPanel,
+  type BrandKitView,
+} from "@/components/BrandMemoryPanel";
+import {
+  DesignCritic,
+  buildAutoImproveMessage,
+  type CriticReview,
+} from "@/components/DesignCritic";
 import { PreviewShowcase } from "@/components/PreviewShowcase";
 import { VisualEditor } from "@/components/VisualEditor";
 import type { AgentEvent } from "@/lib/agents/types";
+import { deserializeProjectData } from "@/lib/site-data";
 import {
   BRIEF_EXAMPLE_CHIP,
   composeBrief,
@@ -53,6 +64,7 @@ type ProjectState = {
 
 type Props = {
   initialPrompt?: string;
+  initialTemplateId?: string;
   projectId?: string;
 };
 
@@ -63,7 +75,11 @@ const EMPTY_BRIEF: BriefFields = {
   vibe: "",
 };
 
-export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
+export function BuilderWorkspace({
+  initialPrompt = "",
+  initialTemplateId,
+  projectId,
+}: Props) {
   const router = useRouter();
   const [brief, setBrief] = useState<BriefFields>(EMPTY_BRIEF);
   const [chatInput, setChatInput] = useState("");
@@ -84,8 +100,28 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
   const [llmReady, setLlmReady] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
+  const [criticReview, setCriticReview] = useState<CriticReview | null>(null);
+  const [brandKit, setBrandKit] = useState<BrandKitView | null>(null);
+  const [seoInfo, setSeoInfo] = useState<{
+    title?: string | null;
+    description?: string | null;
+    keywords?: string[] | null;
+  } | null>(null);
+  const [templateId] = useState(initialTemplateId || "");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoStarted = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("magic-brand-kit");
+      if (raw) {
+        setBrandKit(JSON.parse(raw) as BrandKitView);
+        sessionStorage.removeItem("magic-brand-kit");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const composedBrief = useMemo(() => composeBrief(brief), [brief]);
   const previewSrcDoc = useMemo(() => project?.html || "", [project?.html]);
@@ -169,6 +205,16 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           if (data.project.published && data.project.slug) {
             setPublishUrl(`/s/${data.project.slug}`);
           }
+          const site = deserializeProjectData(data.project.data);
+          if (site?.brandKit) setBrandKit(site.brandKit);
+          if (site?.spec.seo || data.project.seoTitle) {
+            setSeoInfo({
+              title: data.project.seoTitle || site?.spec.seo?.title,
+              description:
+                data.project.seoDescription || site?.spec.seo?.description,
+              keywords: site?.spec.seo?.keywords,
+            });
+          }
         }
       } catch {
         setBootError("Something went wrong loading the builder. Please refresh.");
@@ -207,14 +253,16 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     const theme = pickThemeFromBrief(value);
     setSiteTheme(theme);
 
-    const ok = await ensureAuth(
-      `/builder?prompt=${encodeURIComponent(value)}`,
-    );
+    const authCallback = templateId
+      ? `/builder?prompt=${encodeURIComponent(value)}&templateId=${encodeURIComponent(templateId)}`
+      : `/builder?prompt=${encodeURIComponent(value)}`;
+    const ok = await ensureAuth(authCallback);
     if (!ok) return;
 
     setBusy(true);
     setError("");
     setAgentEvents([]);
+    setCriticReview(null);
     setStatus("Building your site from your brief…");
     setMessages((prev) => [
       ...prev,
@@ -234,6 +282,10 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
           theme,
           provider: llmProvider,
           model: selectedModel,
+          templateId: templateId || undefined,
+          brandKit: brandKit
+            ? { ...brandKit, source: "deterministic" as const }
+            : undefined,
         }),
         signal: controller.signal,
       });
@@ -242,6 +294,14 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       let data: {
         error?: string;
         project?: ProjectState;
+        review?: CriticReview | null;
+        events?: AgentEvent[];
+        brandKit?: BrandKitView | null;
+        seo?: {
+          title?: string;
+          description?: string;
+          keywords?: string[];
+        } | null;
       } = {};
       try {
         data = await res.json();
@@ -265,12 +325,25 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         return;
       }
       setProject(data.project);
+      if (data.events?.length) setAgentEvents(data.events);
+      if (data.review) setCriticReview(data.review);
+      if (data.brandKit) setBrandKit(data.brandKit);
+      if (data.seo) setSeoInfo(data.seo);
+      else if (data.project.seoTitle || data.project.seoDescription) {
+        setSeoInfo({
+          title: data.project.seoTitle,
+          description: data.project.seoDescription,
+        });
+      }
+      const scoreNote =
+        data.review != null
+          ? ` Quality ${data.review.scores?.overall ?? data.review.score}/100 — use Auto improve or chat to polish.`
+          : "";
       setMessages([
         { role: "user", content: value },
         {
           role: "assistant",
-          content:
-            "Your site is ready — preview on the right. Ask me to change copy, colors, or sections in chat.",
+          content: `Your site is ready — preview on the right.${scoreNote}`,
         },
       ]);
       if (!projectId) {
@@ -337,6 +410,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
         event?: AgentEvent;
         project?: ProjectState;
         messages?: Message[];
+        review?: CriticReview;
         error?: string;
       };
       try {
@@ -353,6 +427,7 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       if (chunk.type === "result" && chunk.project) {
         setProject(chunk.project);
         setMessages(chunk.messages || []);
+        if (chunk.review) setCriticReview(chunk.review);
         handled = true;
         return;
       }
@@ -395,6 +470,26 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
     setMessages(data.messages || []);
   }
 
+  async function runRefine(value: string) {
+    if (!project?.html || !value.trim() || busy) return;
+    const id = project.id;
+    setBusy(true);
+    setError("");
+    setAgentEvents([]);
+    setStatus("Applying your changes…");
+    setMessages((prev) => [...prev, { role: "user", content: value }]);
+
+    try {
+      const streamed = await refineStreaming(id, value);
+      if (!streamed) await refineOnce(id, value);
+    } catch {
+      setError("Could not apply that change. Please try again.");
+    } finally {
+      setBusy(false);
+      setStatus("");
+    }
+  }
+
   async function onChat(e: FormEvent) {
     e.preventDefault();
     const value = chatInput.trim();
@@ -406,23 +501,13 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
       return;
     }
 
-    const projectId = project.id;
-    setBusy(true);
-    setError("");
-    setAgentEvents([]);
-    setStatus("Applying your changes…");
     setChatInput("");
-    setMessages((prev) => [...prev, { role: "user", content: value }]);
+    await runRefine(value);
+  }
 
-    try {
-      const streamed = await refineStreaming(projectId, value);
-      if (!streamed) await refineOnce(projectId, value);
-    } catch {
-      setError("Could not apply that change. Please try again.");
-    } finally {
-      setBusy(false);
-      setStatus("");
-    }
+  async function onAutoImprove() {
+    if (!criticReview || !project?.html || busy) return;
+    await runRefine(buildAutoImproveMessage(criticReview));
   }
 
   async function onExport(format: "html" | "react" | "astro" | "wordpress") {
@@ -698,6 +783,31 @@ export function BuilderWorkspace({ initialPrompt = "", projectId }: Props) {
               </div>
             ))}
             <AgentProgress events={agentEvents} busy={busy} />
+            {project?.html ? (
+              <>
+                <DesignCritic
+                  review={criticReview}
+                  busy={busy}
+                  onAutoImprove={() => void onAutoImprove()}
+                />
+                <BrandMemoryPanel
+                  brandKit={brandKit}
+                  seo={seoInfo}
+                  theme={siteTheme}
+                />
+                <PublishFlowPanel
+                  published={Boolean(project.published)}
+                  publishUrl={publishUrl}
+                  customDomain={project.customDomain}
+                  busy={busy}
+                  onPublish={() => void onPublish()}
+                  scoreOk={
+                    !criticReview ||
+                    (criticReview.scores?.overall ?? criticReview.score) >= 70
+                  }
+                />
+              </>
+            ) : null}
             {status ? (
               <p className="animate-pulse text-xs text-lime">{status}</p>
             ) : null}

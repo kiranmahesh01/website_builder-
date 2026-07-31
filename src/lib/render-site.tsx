@@ -31,6 +31,13 @@ export async function renderSpecToHtml(
   const title = spec.seo?.title || spec.brand;
   const description =
     spec.seo?.description || `Website for ${spec.brand} — built with Magic AI.`;
+  const keywords = (spec.seo?.keywords || []).join(", ");
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: spec.brand,
+    description,
+  };
 
   const appOrigin =
     process.env.AUTH_URL?.replace(/\/$/, "") ||
@@ -78,8 +85,10 @@ export async function renderSpecToHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}" />
+  ${keywords ? `<meta name="keywords" content="${escapeHtml(keywords)}" />` : ""}
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(description)}" />
+  <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <style>

@@ -3,20 +3,44 @@ import { parseWebsite } from "@/lib/schema";
 import type { SiteSpec } from "@/lib/spec/schema";
 import { parseSiteSpec } from "@/lib/spec/schema";
 
+/** Persisted brand kit snapshot (optional on project data). */
+export type StoredBrandKit = {
+  businessName: string;
+  tagline: string;
+  description: string;
+  logoIdea: string;
+  colors: {
+    primary: string;
+    accent: string;
+    surface: string;
+    text: string;
+  };
+  fonts: {
+    display: string;
+    body: string;
+  };
+  audience: string;
+  socialPosts: string[];
+  source?: string;
+};
+
 export type ProjectSiteData = {
   version: 2;
   spec: SiteSpec;
   website: Website;
+  brandKit?: StoredBrandKit;
 };
 
 export function serializeProjectData(input: {
   spec: SiteSpec;
   website: Website;
+  brandKit?: StoredBrandKit | null;
 }): string {
   const payload: ProjectSiteData = {
     version: 2,
     spec: input.spec,
     website: input.website,
+    ...(input.brandKit ? { brandKit: input.brandKit } : {}),
   };
   return JSON.stringify(payload);
 }
@@ -36,7 +60,14 @@ export function deserializeProjectData(raw: unknown): ProjectSiteData | null {
   if (obj.version === 2 && obj.spec && obj.website) {
     const spec = parseSiteSpec(obj.spec);
     const website = parseWebsite(obj.website);
-    if (spec && website) return { version: 2, spec, website };
+    if (spec && website) {
+      return {
+        version: 2,
+        spec,
+        website,
+        brandKit: (obj.brandKit as StoredBrandKit | undefined) || undefined,
+      };
+    }
   }
   return null;
 }

@@ -6,7 +6,7 @@ import { normalizeStructure, validateStructure } from "@/lib/spec/validate";
 import type { DesignTokens, SectionId } from "@/lib/spec/schema";
 import type { SiteThemeName } from "@/lib/themes";
 import type { MixedTemplate, TemplateSearchResult } from "../types";
-import { mixFromBrief } from "./mix";
+import { mixFromBrief, mixTemplates } from "./mix";
 import { searchTemplates } from "./search";
 
 export type AppliedTemplateBlueprint = {
@@ -63,13 +63,22 @@ export function mixedToApplied(
 }
 
 /** End-to-end: brief → search/mix → applied blueprint (no LLM). */
-export function applyTemplateEngine(brief: string): {
+export function applyTemplateEngine(
+  brief: string,
+  options?: { templateId?: string },
+): {
   blueprint: AppliedTemplateBlueprint;
   search: TemplateSearchResult;
   mixed: MixedTemplate | null;
 } {
   const search = searchTemplates(brief, { limit: 5 });
-  const mixed = mixFromBrief(brief);
+  const mixed = options?.templateId
+    ? mixTemplates(brief, {
+        sectionsFrom: options.templateId,
+        tokensFrom: options.templateId,
+        copyFrom: options.templateId,
+      })
+    : mixFromBrief(brief);
 
   if (!mixed) {
     return {

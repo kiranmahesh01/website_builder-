@@ -25,6 +25,7 @@ import { agentJson, isOffline, type AgentLlmContext } from "./llm";
 import type { ProjectMemoryModel } from "./memory";
 import type {
   AgentPlan,
+  QualityScores,
   ReviewCheck,
   ReviewReport,
   ValidationIssue,
@@ -57,6 +58,52 @@ export function computeDesignScore(
   if (!hasHero) score -= 15;
 
   return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+/** Multi-dimension Website Quality Score (deterministic, cheap). */
+export function computeQualityScores(
+  spec: SiteSpec,
+  issues: ValidationIssue[],
+  html?: string,
+): QualityScores {
+  const design = computeDesignScore(spec, issues);
+
+  let seo = 60;
+  if (spec.seo?.title) seo += 12;
+  if (spec.seo?.description) seo += 12;
+  if ((spec.seo?.keywords?.length || 0) >= 3) seo += 8;
+  if (spec.seo?.title && spec.seo.title.length <= 70) seo += 4;
+  if (spec.seo?.description && spec.seo.description.length <= 160) seo += 4;
+  if (!spec.seo?.title || !spec.seo?.description) seo -= 20;
+  seo = Math.max(0, Math.min(100, seo));
+
+  let mobile = 72;
+  const sectionCount = spec.pages.reduce((n, p) => n + p.sections.length, 0);
+  if (sectionCount <= 8) mobile += 6;
+  if (sectionCount > 10) mobile -= 10;
+  const hasContact = spec.pages.some((p) =>
+    p.sections.some((s) => /contact|cta|footer/.test(s.id)),
+  );
+  if (hasContact) mobile += 6;
+  if (issues.some((i) => /overflow|width|mobile/i.test(i.message))) mobile -= 15;
+  mobile = Math.max(0, Math.min(100, mobile));
+
+  let performance = 70;
+  if (html) {
+    if (html.length < 80_000) performance += 10;
+    else if (html.length > 200_000) performance -= 15;
+    const imgCount = (html.match(/<img\b/gi) || []).length;
+    if (imgCount <= 8) performance += 6;
+    if (imgCount > 16) performance -= 10;
+  }
+  if (sectionCount <= 7) performance += 6;
+  performance = Math.max(0, Math.min(100, performance));
+
+  const overall = Math.round(
+    design * 0.4 + mobile * 0.2 + seo * 0.25 + performance * 0.15,
+  );
+
+  return { design, mobile, seo, performance, overall };
 }
 
 /** Phrases that mark copy as generic filler rather than real business writing. */
@@ -388,9 +435,11 @@ export async function reviewSpec(input: {
   record("schema", schemaIssues);
 
   if (schemaIssues.length > 0) {
+    const score = computeDesignScore(input.spec as SiteSpec, issues);
     return {
       passed: false,
-      score: computeDesignScore(input.spec as SiteSpec, issues),
+      score,
+      scores: computeQualityScores(input.spec as SiteSpec, issues),
       issues,
       checks,
     };
@@ -409,16 +458,23 @@ export async function reviewSpec(input: {
     record("render", rendered.issues);
   }
 
-  const score = computeDesignScore(input.spec, issues);
+  const scores = computeQualityScores(input.spec, issues, html);
+  const score = scores.overall;
   checks.push({
     name: "design_score",
-    passed: score >= 70,
-    detail: `${score}/100`,
+    passed: scores.design >= 70,
+    detail: `${scores.design}/100`,
+  });
+  checks.push({
+    name: "quality_breakdown",
+    passed: scores.overall >= 70,
+    detail: `overall ${scores.overall} · mobile ${scores.mobile} · seo ${scores.seo} · perf ${scores.performance}`,
   });
 
   return {
     passed: issues.every((i) => i.severity !== "error"),
     score,
+    scores,
     issues,
     checks,
     html,

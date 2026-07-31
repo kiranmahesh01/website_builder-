@@ -26,6 +26,29 @@ const schema = z.object({
   theme: z
     .enum(["bold_startup", "warm_editorial", "minimal_studio"])
     .optional(),
+  /** User-selected template from the create wizard. */
+  templateId: z.string().max(120).optional(),
+  brandKit: z
+    .object({
+      businessName: z.string(),
+      tagline: z.string(),
+      description: z.string(),
+      logoIdea: z.string(),
+      colors: z.object({
+        primary: z.string(),
+        accent: z.string(),
+        surface: z.string(),
+        text: z.string(),
+      }),
+      fonts: z.object({
+        display: z.string(),
+        body: z.string(),
+      }),
+      audience: z.string(),
+      socialPosts: z.array(z.string()),
+      source: z.literal("deterministic"),
+    })
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -66,6 +89,7 @@ export async function POST(req: Request) {
         provider,
         model,
         theme: parsed.data.theme,
+        templateId: parsed.data.templateId,
         maxFixAttempts: 1,
       });
     } catch (agentError) {
@@ -97,7 +121,11 @@ export async function POST(req: Request) {
 
     const serializedData =
       spec && data
-        ? serializeProjectData({ spec, website: data })
+        ? serializeProjectData({
+            spec,
+            website: data,
+            brandKit: parsed.data.brandKit,
+          })
         : serializeSiteData(data) ?? undefined;
 
     const projectData = {
@@ -164,6 +192,37 @@ export async function POST(req: Request) {
         customDomain: project.customDomain,
       },
       providers,
+      review: run
+        ? {
+            score: run.review.score,
+            passed: run.review.passed,
+            scores: run.review.scores,
+            issues: run.review.issues.map((issue) => ({
+              code: issue.code,
+              severity: issue.severity,
+              message: issue.message,
+              hint: issue.hint,
+              path: issue.path,
+              sectionKey: issue.sectionKey,
+            })),
+          }
+        : null,
+      events: run?.events ?? [],
+      templateIds: run?.blueprint?.templateIds ?? [],
+      brandKit: parsed.data.brandKit ?? null,
+      seo: data?.seo
+        ? {
+            title: data.seo.title,
+            description: data.seo.description,
+            keywords: data.seo.keywords,
+          }
+        : run?.spec.seo
+          ? {
+              title: run.spec.seo.title,
+              description: run.spec.seo.description,
+              keywords: run.spec.seo.keywords,
+            }
+          : null,
     });
   } catch (error) {
     console.error("generate error", error);

@@ -71,8 +71,13 @@ function safeSections(sections: SectionId[]): SectionId[] {
 export function blueprintFromTemplates(
   brief: string,
   retrieved: RetrievedTemplates = retrieveTemplates(brief),
+  options?: { templateId?: string },
 ): WebsiteBlueprint {
-  const applied = applyTemplateEngine(brief);
+  const pinnedId =
+    options?.templateId || retrieved.matches[0]?.template.id || undefined;
+  const applied = applyTemplateEngine(brief, {
+    templateId: pinnedId,
+  });
   const bp = applied.blueprint;
 
   // Blend a second KB hit's tone tips when scores are close.
@@ -104,8 +109,9 @@ export function blueprintFromTemplates(
     layoutRules: bp.layoutRules.slice(0, 6),
     confidence: retrieved.confidence !== "low" ? retrieved.confidence : bp.confidence,
     source: "deterministic",
-    templateIds:
-      bp.templateIds.length > 0
+    templateIds: pinnedId
+      ? [pinnedId, ...retrieved.matches.map((m) => m.template.id).filter((id) => id !== pinnedId)].slice(0, 2)
+      : bp.templateIds.length > 0
         ? bp.templateIds
         : retrieved.matches.map((m) => m.template.id),
   };
@@ -175,9 +181,15 @@ export async function runDesigner(input: {
   ctx: AgentLlmContext;
   /** Force deterministic even when confidence is low (budget protection). */
   forceDeterministic?: boolean;
+  /** Pin a user-selected template from the create wizard. */
+  templateId?: string;
 }): Promise<WebsiteBlueprint> {
-  const retrieved = input.retrieved ?? retrieveTemplates(input.brief);
-  const deterministic = blueprintFromTemplates(input.brief, retrieved);
+  const retrieved =
+    input.retrieved ??
+    retrieveTemplates(input.brief, 2, { templateId: input.templateId });
+  const deterministic = blueprintFromTemplates(input.brief, retrieved, {
+    templateId: input.templateId,
+  });
 
   // Common path: KB hit is good enough — skip the model call.
   if (
