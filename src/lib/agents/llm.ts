@@ -1,16 +1,18 @@
 /**
  * Thin wrapper the agents share for model calls.
  *
- * Routes to NVIDIA NIM when that is the active provider, with OpenRouter as a
- * fallback on transient NIM failures. Enforces a per-run call budget. Every
- * helper returns `null` on failure rather than throwing, so each agent is
- * responsible for a deterministic fallback and a single bad response can never
- * abort a run.
+ * Routes to NVIDIA NIM when that is the active provider, with OmniRoute then
+ * OpenRouter as fallbacks on transient NIM failures (429/529/overloaded).
+ * Enforces a per-run call budget. Every helper returns `null` on failure
+ * rather than throwing, so each agent is responsible for a deterministic
+ * fallback and a single bad response can never abort a run.
  */
 
 import { generateWithNvidia } from "@/lib/llm/nvidia";
+import { generateWithOmniRoute } from "@/lib/llm/omnroute";
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
 import { DEFAULT_OPENROUTER_MODEL } from "@/lib/llm/openrouter-models";
+import { hasOmniRoute } from "@/lib/llm/omnroute-models";
 import { isOpenRouterStyleModel } from "@/lib/llm/nvidia-models";
 import {
   extractJsonObject,
@@ -50,11 +52,14 @@ function hasOpenRouter(): boolean {
 export function isOffline(ctx: AgentLlmContext): boolean {
   if (budgetRemaining(ctx.budget) === 0) return true;
   if (ctx.provider === "demo") return true;
-  if (ctx.provider === "nvidia") return !hasNvidia() && !hasOpenRouter();
+  if (ctx.provider === "nvidia") {
+    return !hasNvidia() && !hasOmniRoute() && !hasOpenRouter();
+  }
+  if (ctx.provider === "omnroute") return !hasOmniRoute();
   if (ctx.provider === "openrouter" || ctx.provider === "openrouter-best") {
     return !hasOpenRouter();
   }
-  return !hasNvidia() && !hasOpenRouter();
+  return !hasNvidia() && !hasOmniRoute() && !hasOpenRouter();
 }
 
 async function callOpenRouter(
@@ -80,6 +85,18 @@ async function callOpenRouter(
   });
 }
 
+async function callOmniRoute(
+  messages: ChatMessage[],
+  maxTokens: number,
+  model?: string | null,
+): Promise<string> {
+  return generateWithOmniRoute(messages, {
+    maxTokens,
+    json: true,
+    model: model || undefined,
+  });
+}
+
 export async function agentJson(
   ctx: AgentLlmContext,
   messages: ChatMessage[],
@@ -100,6 +117,26 @@ export async function agentJson(
         });
         return extractJsonObject(raw);
       } catch (nvidiaError) {
+        if (hasOmniRoute()) {
+          console.warn(
+            "agent NVIDIA call failed, falling back to OmniRoute",
+            nvidiaError instanceof Error ? nvidiaError.message : nvidiaError,
+          );
+          try {
+            const raw = await callOmniRoute(messages, maxTokens, null);
+            return extractJsonObject(raw);
+          } catch (omnrouteError) {
+            if (!hasOpenRouter()) throw omnrouteError;
+            console.warn(
+              "agent OmniRoute fallback failed, trying OpenRouter",
+              omnrouteError instanceof Error
+                ? omnrouteError.message
+                : omnrouteError,
+            );
+            const raw = await callOpenRouter(messages, maxTokens, null);
+            return extractJsonObject(raw);
+          }
+        }
         if (!hasOpenRouter()) throw nvidiaError;
         console.warn(
           "agent NVIDIA call failed, falling back to OpenRouter",
@@ -110,7 +147,18 @@ export async function agentJson(
       }
     }
 
-    if (!hasOpenRouter()) return null;
+    if (ctx.provider === "omnroute" && hasOmniRoute()) {
+      const raw = await callOmniRoute(messages, maxTokens, ctx.model);
+      return extractJsonObject(raw);
+    }
+
+    if (!hasOpenRouter()) {
+      if (hasOmniRoute()) {
+        const raw = await callOmniRoute(messages, maxTokens, ctx.model);
+        return extractJsonObject(raw);
+      }
+      return null;
+    }
     const raw = await callOpenRouter(messages, maxTokens, ctx.model);
     return extractJsonObject(raw);
   } catch (error) {

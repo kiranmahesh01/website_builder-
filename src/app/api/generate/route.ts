@@ -34,7 +34,7 @@ const MAX_PROMPT_CHARS = 12_000;
 const schema = z.object({
   prompt: z.string().min(3).max(MAX_PROMPT_CHARS),
   provider: z
-    .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
+    .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "omnroute", "demo"])
     .optional(),
   model: z.string().max(120).optional(),
   projectId: z.string().optional(),

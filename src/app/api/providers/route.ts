@@ -13,6 +13,11 @@ import {
   nvidiaModelChain,
   nvidiaVisionModel,
 } from "@/lib/llm/nvidia-models";
+import {
+  defaultOmniRouteModel,
+  OMNIROUTE_MODEL_OPTIONS,
+  omnrouteBaseUrl,
+} from "@/lib/llm/omnroute-models";
 import { defaultModelForProvider } from "@/lib/llm/resolve-model";
 import { availableProviders, getDefaultProvider } from "@/lib/llm/types";
 
@@ -32,6 +37,7 @@ export async function GET() {
   ).filter(
     (option, index, all) => all.findIndex((o) => o.id === option.id) === index,
   );
+  const omnrouteDefault = defaultOmniRouteModel();
 
   return NextResponse.json({
     providers: availableProviders(),
@@ -46,6 +52,8 @@ export async function GET() {
       openrouter: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
       "openrouter-best": openRouterBestModels().join(", "),
       "openrouter-free": FREE_OPENROUTER_MODELS.join(", "),
+      omnroute: omnrouteDefault,
+      "omnroute-base": omnrouteBaseUrl(),
       vision: openRouterVisionModel(),
       openai: process.env.OPENAI_MODEL || "gpt-4o-mini",
       gemini: process.env.GEMINI_MODEL || "gemini-2.0-flash",
@@ -53,5 +61,10 @@ export async function GET() {
     },
     openrouterOptions: OPENROUTER_MODEL_OPTIONS,
     nvidiaOptions,
+    omnrouteOptions: OMNIROUTE_MODEL_OPTIONS.map((option, index) =>
+      index === 0
+        ? { ...option, id: omnrouteDefault, label: `Auto — ${omnrouteDefault}` }
+        : option,
+    ),
   });
 }

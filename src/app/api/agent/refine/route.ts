@@ -29,7 +29,7 @@ const schema = z.object({
   projectId: z.string().min(1),
   message: z.string().min(1).max(MAX_CHAT_CHARS),
   provider: z
-    .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "demo"])
+    .enum(["nvidia", "openai", "gemini", "bytez", "openrouter", "openrouter-best", "omnroute", "demo"])
     .optional(),
   model: z.string().max(120).optional(),
 });

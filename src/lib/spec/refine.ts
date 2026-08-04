@@ -1,4 +1,7 @@
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
+import { generateWithOmniRoute } from "@/lib/llm/omnroute";
+import { generateWithNvidia } from "@/lib/llm/nvidia";
+import { hasOmniRoute } from "@/lib/llm/omnroute-models";
 import { extractJsonObject, getDefaultProvider, type LlmProvider } from "@/lib/llm/types";
 import type { SiteSpec } from "./schema";
 import { parseSiteSpec } from "./schema";
@@ -30,14 +33,57 @@ export async function refineSiteSpec(input: {
     },
   ];
 
-  if (provider === "openrouter") {
+  async function tryParse(raw: string): Promise<SiteSpec | null> {
+    const json = extractJsonObject(raw);
+    return json ? parseSiteSpec(json) : null;
+  }
+
+  if (provider === "nvidia" && process.env.NVIDIA_API_KEY) {
+    try {
+      const raw = await generateWithNvidia(messages, {
+        maxTokens: 3500,
+        json: true,
+        model: input.model || undefined,
+      });
+      const parsed = await tryParse(raw);
+      if (parsed) return parsed;
+    } catch {
+      if (hasOmniRoute()) {
+        const raw = await generateWithOmniRoute(messages, {
+          maxTokens: 3500,
+          json: true,
+        });
+        const parsed = await tryParse(raw);
+        if (parsed) return parsed;
+      } else if (process.env.OPENROUTER_API_KEY) {
+        const raw = await generateWithOpenRouter(messages, {
+          maxTokens: 3500,
+          json: true,
+          model: input.model || undefined,
+        });
+        const parsed = await tryParse(raw);
+        if (parsed) return parsed;
+      }
+    }
+  }
+
+  if (provider === "omnroute" && hasOmniRoute()) {
+    const raw = await generateWithOmniRoute(messages, {
+      maxTokens: 3500,
+      json: true,
+      model: input.model || undefined,
+    });
+    const parsed = await tryParse(raw);
+    if (parsed) return parsed;
+  }
+
+  if (provider === "openrouter" || process.env.OPENROUTER_API_KEY) {
     const raw = await generateWithOpenRouter(messages, {
       maxTokens: 3500,
       json: true,
       model: input.model || undefined,
     });
-    const json = extractJsonObject(raw);
-    const parsed = json ? parseSiteSpec(json) : null;
+    const parsed = await tryParse(raw);
     if (parsed) return parsed;
   }
 

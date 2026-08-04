@@ -172,7 +172,7 @@ export function isNvidiaUltraModel(model: string): boolean {
 }
 
 export function isRetryableNvidiaError(message: string): boolean {
-  return /429|rate limit|too many requests|404|not found|unavailable|overloaded|capacity|timeout|500|502|503|504|empty response|invalid json/i.test(
+  return /429|rate limit|too many requests|404|not found|unavailable|overloaded|capacity|timeout|500|502|503|504|529|empty response|invalid json/i.test(
     message,
   );
 }

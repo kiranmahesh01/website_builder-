@@ -5,6 +5,7 @@ export type LlmProvider =
   | "bytez"
   | "openrouter"
   | "openrouter-best"
+  | "omnroute"
   | "demo";
 
 export type ChatMessage = {
@@ -12,12 +13,20 @@ export type ChatMessage = {
   content: string;
 };
 
+function hasOmniRouteEnv(): boolean {
+  return Boolean(
+    process.env.OMNIROUTE_BASE_URL?.trim() ||
+      process.env.OMNIROUTE_API_KEY?.trim(),
+  );
+}
+
 export function availableProviders(): LlmProvider[] {
   const providers: LlmProvider[] = [];
   if (process.env.NVIDIA_API_KEY) providers.push("nvidia");
   if (process.env.OPENROUTER_API_KEY) {
     providers.push("openrouter");
   }
+  if (hasOmniRouteEnv()) providers.push("omnroute");
   if (process.env.OPENAI_API_KEY) providers.push("openai");
   if (process.env.GOOGLE_AI_API_KEY) providers.push("gemini");
   if (process.env.BYTEZ_API_KEY) providers.push("bytez");
@@ -45,8 +54,13 @@ export function getDefaultProvider(): LlmProvider {
     if (process.env.NVIDIA_API_KEY) return "nvidia";
     return fromEnv === "openrouter-best" ? "openrouter-best" : "openrouter";
   }
+  if (fromEnv === "omnroute" && hasOmniRouteEnv()) {
+    if (process.env.NVIDIA_API_KEY) return "nvidia";
+    return "omnroute";
+  }
   if (process.env.NVIDIA_API_KEY) return "nvidia";
   if (process.env.OPENROUTER_API_KEY) return "openrouter";
+  if (hasOmniRouteEnv()) return "omnroute";
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.GOOGLE_AI_API_KEY) return "gemini";
   if (process.env.BYTEZ_API_KEY) return "bytez";
@@ -66,6 +80,8 @@ function missingProviderMessage(provider: LlmProvider): string {
     case "openrouter":
     case "openrouter-best":
       return "OpenRouter is not configured. Set OPENROUTER_API_KEY in .env (https://openrouter.ai/keys), or switch to Demo (no API key).";
+    case "omnroute":
+      return "OmniRoute is not configured. Self-host https://github.com/diegosouzapw/OmniRoute, then set OMNIROUTE_BASE_URL (and OMNIROUTE_API_KEY if required).";
     default:
       return "Provider is not configured.";
   }
@@ -88,10 +104,18 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
     if (preferred === "openrouter-best" && available.includes("openrouter-best")) {
       return "openrouter-best";
     }
+    if (preferred === "omnroute" && available.includes("omnroute")) return "omnroute";
     if (preferred === "openai" && available.includes("openai")) return "openai";
     if (preferred === "gemini" && available.includes("gemini")) return "gemini";
     if (preferred === "bytez" && available.includes("bytez")) return "bytez";
     return "openrouter";
+  }
+
+  if (hasOmniRouteEnv() && preferred !== "demo") {
+    if (preferred === "openai" && available.includes("openai")) return "openai";
+    if (preferred === "gemini" && available.includes("gemini")) return "gemini";
+    if (preferred === "bytez" && available.includes("bytez")) return "bytez";
+    return "omnroute";
   }
 
   if (
@@ -101,6 +125,7 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
     preferred === "bytez" ||
     preferred === "openrouter" ||
     preferred === "openrouter-best" ||
+    preferred === "omnroute" ||
     preferred === "demo"
   ) {
     if (available.includes(preferred)) return preferred;
@@ -110,7 +135,8 @@ export function resolveProvider(preferred?: string | null): LlmProvider {
       preferred === "gemini" ||
       preferred === "bytez" ||
       preferred === "openrouter" ||
-      preferred === "openrouter-best"
+      preferred === "openrouter-best" ||
+      preferred === "omnroute"
     ) {
       throw new Error(missingProviderMessage(preferred));
     }

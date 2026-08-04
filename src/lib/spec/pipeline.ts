@@ -1,4 +1,6 @@
 import { generateWithNvidia } from "@/lib/llm/nvidia";
+import { generateWithOmniRoute } from "@/lib/llm/omnroute";
+import { hasOmniRoute } from "@/lib/llm/omnroute-models";
 import { generateWithOpenRouter } from "@/lib/llm/openrouter";
 import {
   extractJsonObject,
@@ -57,7 +59,38 @@ async function callJson(
 ): Promise<unknown> {
   let raw: string;
   if (provider === "nvidia") {
-    raw = await generateWithNvidia(messages, {
+    try {
+      raw = await generateWithNvidia(messages, {
+        maxTokens,
+        json: true,
+        model: model || undefined,
+      });
+    } catch (nvidiaError) {
+      if (hasOmniRoute()) {
+        console.warn(
+          "spec pipeline NVIDIA failed, falling back to OmniRoute",
+          nvidiaError instanceof Error ? nvidiaError.message : nvidiaError,
+        );
+        raw = await generateWithOmniRoute(messages, {
+          maxTokens,
+          json: true,
+        });
+      } else if (process.env.OPENROUTER_API_KEY) {
+        console.warn(
+          "spec pipeline NVIDIA failed, falling back to OpenRouter",
+          nvidiaError instanceof Error ? nvidiaError.message : nvidiaError,
+        );
+        raw = await generateWithOpenRouter(messages, {
+          maxTokens,
+          json: true,
+          model: model || undefined,
+        });
+      } else {
+        throw nvidiaError;
+      }
+    }
+  } else if (provider === "omnroute") {
+    raw = await generateWithOmniRoute(messages, {
       maxTokens,
       json: true,
       model: model || undefined,

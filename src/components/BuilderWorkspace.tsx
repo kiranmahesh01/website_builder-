@@ -135,7 +135,9 @@ export function BuilderWorkspace({
       modelOptions.find((m) => m.id === selectedModel)?.role ||
       (llmProvider === "nvidia"
         ? "NVIDIA NIM models"
-        : "OpenRouter free models"),
+        : llmProvider === "omnroute"
+          ? "OmniRoute gateway models"
+          : "OpenRouter free models"),
     [modelOptions, selectedModel, llmProvider],
   );
 
@@ -162,11 +164,16 @@ export function BuilderWorkspace({
           defaults?: { provider?: string; model?: string };
           openrouterOptions?: ModelOption[];
           nvidiaOptions?: ModelOption[];
+          omnrouteOptions?: ModelOption[];
         };
         const provider = providersData.defaults?.provider || "nvidia";
         const defaultModel =
           providersData.defaults?.model ||
-          (provider === "nvidia" ? DEFAULT_NVIDIA_MODEL : DEFAULT_OPENROUTER_MODEL);
+          (provider === "nvidia"
+            ? DEFAULT_NVIDIA_MODEL
+            : provider === "omnroute"
+              ? "auto"
+              : DEFAULT_OPENROUTER_MODEL);
         setLlmProvider(provider);
         if (provider === "nvidia") {
           const options =
@@ -182,6 +189,20 @@ export function BuilderWorkspace({
                     : option,
                 );
           setModelOptions(options);
+          setSelectedModel(defaultModel);
+        } else if (provider === "omnroute") {
+          setModelOptions(
+            providersData.omnrouteOptions &&
+              providersData.omnrouteOptions.length > 0
+              ? providersData.omnrouteOptions
+              : [
+                  {
+                    id: "auto",
+                    label: "Auto — OmniRoute smart route",
+                    role: "Routes across connected free/paid backends",
+                  },
+                ],
+          );
           setSelectedModel(defaultModel);
         } else {
           setModelOptions(
@@ -631,8 +652,10 @@ export function BuilderWorkspace({
             disabled={busy}
             title={
               llmProvider === "nvidia"
-                ? "NVIDIA NIM model — falls back automatically if one fails"
-                : "OpenRouter free model — falls back automatically if one fails"
+                ? "NVIDIA NIM model — falls back to OmniRoute/OpenRouter if overloaded"
+                : llmProvider === "omnroute"
+                  ? "OmniRoute gateway model (self-hosted)"
+                  : "OpenRouter free model — falls back automatically if one fails"
             }
           >
             {modelOptions.map((m) => (

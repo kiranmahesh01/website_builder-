@@ -2,6 +2,7 @@ import { generateWithBytez } from "./bytez";
 import { generateWebsiteData, refineWithDemo } from "./demo";
 import { generateWithGemini } from "./gemini";
 import { generateWithNvidia } from "./nvidia";
+import { generateWithOmniRoute } from "./omnroute";
 import { generateWithOpenAI } from "./openai";
 import { generateWithOpenRouter } from "./openrouter";
 import { generateOpenRouterBestOf } from "./openrouter-best";
@@ -9,6 +10,7 @@ import {
   DEFAULT_OPENROUTER_MODEL,
   PAID_FALLBACK_MODEL,
 } from "./openrouter-models";
+import { hasOmniRoute } from "./omnroute-models";
 import type { Website } from "@/lib/schema";
 import {
   buildBriefUserMessage,
@@ -74,7 +76,38 @@ async function generateWithProvider(
   options?: { maxTokens?: number },
 ): Promise<string> {
   if (provider === "nvidia") {
-    return generateWithNvidia(messages, {
+    try {
+      return await generateWithNvidia(messages, {
+        model: model || undefined,
+        maxTokens: options?.maxTokens,
+      });
+    } catch (nvidiaError) {
+      // Prefer OmniRoute when NVIDIA is overloaded (529/etc.), then OpenRouter.
+      if (hasOmniRoute()) {
+        console.warn(
+          "NVIDIA failed, falling back to OmniRoute",
+          nvidiaError instanceof Error ? nvidiaError.message : nvidiaError,
+        );
+        return generateWithOmniRoute(messages, {
+          maxTokens: options?.maxTokens,
+          json: false,
+        });
+      }
+      if (process.env.OPENROUTER_API_KEY) {
+        console.warn(
+          "NVIDIA failed, falling back to OpenRouter",
+          nvidiaError instanceof Error ? nvidiaError.message : nvidiaError,
+        );
+        return generateWithOpenRouter(messages, {
+          model: model || undefined,
+          maxTokens: options?.maxTokens,
+        });
+      }
+      throw nvidiaError;
+    }
+  }
+  if (provider === "omnroute") {
+    return generateWithOmniRoute(messages, {
       model: model || undefined,
       maxTokens: options?.maxTokens,
     });

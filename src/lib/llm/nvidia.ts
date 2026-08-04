@@ -178,9 +178,9 @@ function normalizeError(error: unknown, model: string): Error {
       "NVIDIA API key is invalid. Get a free key at https://build.nvidia.com and set NVIDIA_API_KEY.",
     );
   }
-  if (/429|rate limit|too many requests/i.test(message)) {
+  if (/429|rate limit|too many requests|529|overloaded/i.test(message)) {
     return new Error(
-      `NVIDIA rate limit on ${model} (free tier is ~40 req/min). Trying the next model…`,
+      `NVIDIA rate limit/overloaded on ${model} (free tier is ~40 req/min; 529 = capacity). Trying the next model…`,
     );
   }
   return new Error(`NVIDIA (${model}): ${message}`);

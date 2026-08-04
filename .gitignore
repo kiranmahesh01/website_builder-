@@ -47,6 +47,9 @@ prisma/*.db-journal
 .agents/
 skills-lock.json
 
+# local OmniRoute clone used for docs inspection only
+.tmp-omnroute/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
